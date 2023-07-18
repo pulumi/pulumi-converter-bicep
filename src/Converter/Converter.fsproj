@@ -11,6 +11,7 @@
         <Compile Include="ResourceTokens.fs" />
         <Compile Include="PulumiTypes.fs" />
         <Compile Include="Transform.fs" />
+        <Compile Include="Printer.fs" />
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="Azure.Bicep.Core" Version="0.19.5" />

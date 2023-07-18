@@ -9,7 +9,7 @@ type PulumiForSyntax = {
 [<RequireQualifiedAccess>]
 type PulumiSyntax =
     | String of string
-    | InterpolatedString of string
+    | InterpolatedString of expressions: PulumiSyntax list * segments: string list
     | Integer of int64
     | Boolean of bool
     | Array of elements:PulumiSyntax list
@@ -43,10 +43,10 @@ type Resource = {
 }
 
 type Component = {
-    name: string 
+    name: string
+    path: string
     logicalName: string option
-    token: string
-    inputs: Map<string, PulumiSyntax>
+    inputs: Map<PulumiSyntax, PulumiSyntax>
     options: ResourceOptions option
 }
 

@@ -1,5 +1,6 @@
 module rec Converter.Transform
 
+open System.ComponentModel
 open Converter.BicepParser
 open Converter.PulumiTypes
 
@@ -27,9 +28,16 @@ let transformFunction name args program =
     | funcName, args ->
         PulumiSyntax.FunctionCall(funcName, [ for arg in args -> fromBicep arg program ])
 
+type ProgramState = {
+    variableReplacements: Map<string, PulumiSyntax>
+}
+
 let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
     match expr with
     | BicepSyntax.String value -> PulumiSyntax.String value
+    | BicepSyntax.InterpolatedString (expressions, segments) ->
+        let expressions = [ for value in expressions -> fromBicep value program ]
+        PulumiSyntax.InterpolatedString (expressions, segments)
     | BicepSyntax.Integer value -> PulumiSyntax.Integer value
     | BicepSyntax.Boolean value -> PulumiSyntax.Boolean value
     | BicepSyntax.Null -> PulumiSyntax.Null
@@ -37,7 +45,11 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
     | BicepSyntax.Object properties ->
         PulumiSyntax.Object(Map.ofList [
             for (key, value) in Map.toList properties do
-                fromBicep key program, fromBicep value program
+                match key with
+                | BicepSyntax.String "odata.type" ->
+                    PulumiSyntax.Identifier "odataType", fromBicep value program
+                | otherwise ->
+                    fromBicep key program, fromBicep value program
         ])
 
     | BicepSyntax.TernaryExpression(condition, trueValue, falseValue) ->
@@ -83,7 +95,7 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
                 PulumiSyntax.VariableAccess variable
         | None ->
             PulumiSyntax.VariableAccess variable
-
+            
     | BicepSyntax.Identifier "odata.type" ->
         PulumiSyntax.Identifier "odataType"
         
@@ -100,8 +112,20 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
                 | BicepSyntax.LocalVariableBlock names -> names
                 | anythingElse -> []
         }
-
-    | _ -> PulumiSyntax.Empty
+        
+    | BicepSyntax.IndexExpression (target, index) ->
+        let target = fromBicep target program
+        let index = fromBicep index program
+        PulumiSyntax.IndexExpression (target, index)
+        
+    | BicepSyntax.IfCondition (condition, value) ->
+        // this is only used for conditional resources
+        // change it into a ternary expression
+        let rewritten = BicepSyntax.TernaryExpression(condition, value, BicepSyntax.Null)
+        fromBicep rewritten program
+    
+    | _ ->
+        PulumiSyntax.Empty
 
 let rec inferPulumiType (defaultValue: BicepSyntax) =
     match defaultValue with
@@ -220,7 +244,7 @@ let extractResourceInputs (properties: Map<BicepSyntax, BicepSyntax>) (program: 
     Map.ofList [
         for (propertyName, propertyValue) in Map.toList properties do
             match propertyName with
-            | BicepSyntax.Identifier "odata.type" ->
+            | BicepSyntax.String "odata.type" ->
                 yield "odataType", fromBicep propertyValue program
             | BicepSyntax.Identifier propertyName ->
                 if not (List.contains propertyName reservedResourceKeywords) then
@@ -228,6 +252,11 @@ let extractResourceInputs (properties: Map<BicepSyntax, BicepSyntax>) (program: 
             | _ ->
                 ()
     ]
+    
+let extractComponentInputs (properties: Map<string, PulumiSyntax>) =
+    match Map.tryFind "params" properties with
+    | Some(PulumiSyntax.Object componentInputs) -> componentInputs
+    | _ -> Map.empty
 
 let extractLogicalName (properties: Map<BicepSyntax, BicepSyntax>) =
     let name = properties |> Map.tryFind (BicepSyntax.Identifier "name")
@@ -262,7 +291,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             |> function
                 | Some options -> { options with range = Some range }
                 | None -> { ResourceOptions.Empty with range = Some range }
-        
+
         let resource : Resource = {
             name = name
             token = resourceType
@@ -274,8 +303,189 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
         Some resource
 
     | BicepSyntax.For forLoopExpression ->
-        None
+        let valueVariable =
+            match forLoopExpression.variableSection with
+            | BicepSyntax.LocalVariable name -> Some name
+            | BicepSyntax.LocalVariableBlock names when names.Length > 0 -> Some names[0]
+            | _ -> None
+
+        let keyVariable =
+            match forLoopExpression.variableSection with
+            | BicepSyntax.LocalVariableBlock names when names.Length = 2 -> Some names[1]
+            | _ -> None
+
+        let properties =
+            let valueReplacement = BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "range", "value")
+            let keyReplacement = BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "range", "key")
+
+            let replacements = Map.ofList [
+                match valueVariable with
+                | Some variableName -> variableName, valueReplacement
+                | None -> ()
+                
+                match keyVariable with
+                | Some variableName -> variableName, keyReplacement
+                | None -> ()
+            ]
+            
+            let replacedBody = BicepProgram.replaceVariables replacements forLoopExpression.body
+            match replacedBody with
+            | BicepSyntax.Object modifiedProperties -> modifiedProperties
+            | _ -> Map.empty
+            
+        let createResource range =
+            let resourceOptions =
+                extractResourceOptions properties program
+                |> function
+                    | Some options -> { options with range = Some (fromBicep range program) }
+                    | None -> { ResourceOptions.Empty with range = Some (fromBicep range program) }
+
+            let resource : Resource = {
+                name = name
+                token = resourceType
+                logicalName = extractLogicalName properties
+                inputs = extractResourceInputs properties program
+                options = Some resourceOptions
+            }
+            
+            Some resource
+   
+        match keyVariable, forLoopExpression.expression with
+        | None, BicepSyntax.FunctionCall("range", [ BicepSyntax.Integer start; count ]) when start = 0 ->
+            // transform [ for index in range(0, count): { ... } ] to options { range = count }
+            createResource count
+        | _ ->
+            // transform [ for <vars> in <expr>: { ... } ] to options { range = <expr> }
+            createResource  forLoopExpression.expression
     | _ ->
         None
-        
 
+
+let bicepModule (moduleDecl: ModuleDeclaration) (program: BicepProgram) : Component option =
+    match moduleDecl.value with
+    | BicepSyntax.Object properties ->
+        let componentDecl : Component = {
+            name = moduleDecl.name
+            path = moduleDecl.path
+            logicalName = extractLogicalName properties
+            inputs =
+                extractResourceInputs properties program
+                |> extractComponentInputs
+            options = extractResourceOptions properties program
+        }
+
+        Some componentDecl
+
+    | BicepSyntax.IfCondition (condition, BicepSyntax.Object properties) ->
+        // range = condition ? 1 : 0
+        let range = PulumiSyntax.TernaryExpression(
+            fromBicep condition program,
+            PulumiSyntax.Integer 1,
+            PulumiSyntax.Integer 0)
+
+        let resourceOptions =
+            extractResourceOptions properties program
+            |> function
+                | Some options -> { options with range = Some range }
+                | None -> { ResourceOptions.Empty with range = Some range }
+
+        let componentDecl : Component = {
+            name = moduleDecl.name
+            path = moduleDecl.path
+            logicalName = extractLogicalName properties
+            inputs =
+                extractResourceInputs properties program
+                |> extractComponentInputs
+            options = Some resourceOptions
+        }
+        
+        Some componentDecl
+
+    | BicepSyntax.For forLoopExpression ->
+        let valueVariable =
+            match forLoopExpression.variableSection with
+            | BicepSyntax.LocalVariable name -> Some name
+            | BicepSyntax.LocalVariableBlock names when names.Length > 0 -> Some names[0]
+            | _ -> None
+
+        let keyVariable =
+            match forLoopExpression.variableSection with
+            | BicepSyntax.LocalVariableBlock names when names.Length = 2 -> Some names[1]
+            | _ -> None
+
+        let properties =
+            let valueReplacement = BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "range", "value")
+            let keyReplacement = BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "range", "key")
+
+            let replacements = Map.ofList [
+                match valueVariable with
+                | Some variableName -> variableName, valueReplacement
+                | None -> ()
+                
+                match keyVariable with
+                | Some variableName -> variableName, keyReplacement
+                | None -> ()
+            ]
+            
+            let replacedBody = BicepProgram.replaceVariables replacements forLoopExpression.body
+            match replacedBody with
+            | BicepSyntax.Object modifiedProperties -> modifiedProperties
+            | _ -> Map.empty
+            
+        let createComponentDecl range =
+            let resourceOptions =
+                extractResourceOptions properties program
+                |> function
+                    | Some options -> { options with range = Some (fromBicep range program) }
+                    | None -> { ResourceOptions.Empty with range = Some (fromBicep range program) }
+
+            let componentDecl : Component = {
+                name = moduleDecl.name
+                path = moduleDecl.path
+                logicalName = extractLogicalName properties
+                inputs =
+                    extractResourceInputs properties program
+                    |> extractComponentInputs
+                options = Some resourceOptions
+            }
+            
+            Some componentDecl
+   
+        match keyVariable, forLoopExpression.expression with
+        | None, BicepSyntax.FunctionCall("range", [ BicepSyntax.Integer start; count ]) when start = 0 ->
+            // transform [ for index in range(0, count): { ... } ] to options { range = count }
+            createComponentDecl count
+        | _ ->
+            // transform [ for <vars> in <expr>: { ... } ] to options { range = <expr> }
+            createComponentDecl  forLoopExpression.expression
+    | _ ->
+        None
+
+let bicepProgram (bicepProgram: BicepProgram) : PulumiProgram =
+    let nodes = [
+         for declaration in bicepProgram.declarations do
+         match declaration with
+         | BicepDeclaration.Parameter parameter ->
+             let configVar = bicepParameterToConfig parameter bicepProgram
+             PulumiNode.ConfigVariable configVar
+             
+         | BicepDeclaration.Variable variable ->
+             let localVariable = bicepVariable variable bicepProgram
+             PulumiNode.LocalVariable localVariable
+             
+         | BicepDeclaration.Output output ->
+             let outputVariable = bicepOutput output bicepProgram
+             PulumiNode.OutputVariable outputVariable
+             
+         | BicepDeclaration.Resource resource ->
+             match bicepResource resource bicepProgram with
+             | Some resource -> PulumiNode.Resource resource
+             | None -> ()
+
+         | BicepDeclaration.Module moduleDecl ->
+             match bicepModule moduleDecl bicepProgram with
+             | Some componentDecl -> PulumiNode.Component componentDecl
+             | None -> ()
+    ]
+    
+    { nodes = nodes }
