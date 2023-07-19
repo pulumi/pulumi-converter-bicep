@@ -1,6 +1,5 @@
 module rec Converter.Transform
 
-open System.ComponentModel
 open Converter.BicepParser
 open Converter.PulumiTypes
 
@@ -78,6 +77,15 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
             // translate as is
             let variableAccess = fromBicep (BicepSyntax.VariableAccess variableName) program
             PulumiSyntax.PropertyAccess(variableAccess, "outputs")
+
+    | BicepSyntax.PropertyAccess (BicepSyntax.VariableAccess variableName, "properties") ->
+        if BicepProgram.isResourceDeclaration variableName program then
+            // reduce {resource.properties} to just {resource}
+            PulumiSyntax.VariableAccess variableName
+        else
+            // translate as is
+            let variableAccess = fromBicep (BicepSyntax.VariableAccess variableName) program
+            PulumiSyntax.PropertyAccess(variableAccess, "properties")
 
     | BicepSyntax.PropertyAccess (target, property) ->
         PulumiSyntax.PropertyAccess(fromBicep target program, property)
@@ -253,6 +261,23 @@ let extractResourceInputs (properties: Map<BicepSyntax, BicepSyntax>) (program: 
                 ()
     ]
     
+let spreadProperties (inputs: Map<string, PulumiSyntax>): Map<string, PulumiSyntax> =
+    Map.ofList [
+        for key, value in Map.toList inputs do
+            match key, value with
+            | "properties", PulumiSyntax.Object properties ->
+                for propertyName, propertyValue in Map.toList properties do
+                    match propertyName with
+                    | PulumiSyntax.Identifier name -> 
+                        yield name, propertyValue
+                    | PulumiSyntax.String name ->
+                        yield name, propertyValue
+                    | _ ->
+                        ()
+            | _ ->
+                yield key, value
+    ]
+
 let extractComponentInputs (properties: Map<string, PulumiSyntax>) =
     match Map.tryFind "params" properties with
     | Some(PulumiSyntax.Object componentInputs) -> componentInputs
@@ -266,14 +291,16 @@ let extractLogicalName (properties: Map<BicepSyntax, BicepSyntax>) =
 
 let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Resource option =
     let name = resource.name
-    let resourceType = ResourceTokens.fromAzureSpecToPulumi resource.token
+    let resourceType = ResourceTokens.fromAzureSpecToPulumiWithoutVersion resource.token
     match resource.value with
     | BicepSyntax.Object properties ->
         let resource : Resource = {
             name = name
             token = resourceType
             logicalName = extractLogicalName properties
-            inputs = extractResourceInputs properties program
+            inputs =
+                extractResourceInputs properties program
+                |> spreadProperties
             options = extractResourceOptions properties program
         }
 
@@ -296,7 +323,9 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             name = name
             token = resourceType
             logicalName = extractLogicalName properties
-            inputs = extractResourceInputs properties program
+            inputs =
+                extractResourceInputs properties program
+                |> spreadProperties
             options = Some resourceOptions
         }
         
@@ -344,10 +373,12 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
                 name = name
                 token = resourceType
                 logicalName = extractLogicalName properties
-                inputs = extractResourceInputs properties program
+                inputs =
+                    extractResourceInputs properties program
+                    |> spreadProperties
                 options = Some resourceOptions
             }
-            
+
             Some resource
    
         match keyVariable, forLoopExpression.expression with

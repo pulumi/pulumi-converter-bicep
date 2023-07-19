@@ -5,7 +5,11 @@ open Humanizer
 
 let private moduleAndResource (fullQualifiedTypeName: string) =
     match fullQualifiedTypeName.Split "/" with
-    | [| resourceNamespace; resourceName |] ->
+    | [|  |] ->
+        "unknown", "unknown"
+    | segments ->
+        let resourceNamespace = segments[0]
+        let resourceName = segments[segments.Length - 1]
         let resourceModule =
             if resourceNamespace.StartsWith "Microsoft." then
                 resourceNamespace.Substring(10).Replace(".", "").ToLower()
@@ -14,9 +18,6 @@ let private moduleAndResource (fullQualifiedTypeName: string) =
                 
         let resource = resourceName.Pascalize().Singularize(true)
         resourceModule, resource
-
-    | _ ->
-        "unknown", "unknown"
 
 let fromAzureSpecToPulumi(token: string) =
     if String.IsNullOrWhiteSpace token then
@@ -35,3 +36,12 @@ let fromAzureSpecToPulumi(token: string) =
 
         | _ ->
             "azure-native:unknown:unknown"
+
+let fromAzureSpecToPulumiWithoutVersion(token: string) =
+    if String.IsNullOrWhiteSpace token then
+        "azure-native:unknown:unknown"
+    else
+        match token.Split "@" with
+        | [| fullQualifiedTypeName; version |] -> fromAzureSpecToPulumi fullQualifiedTypeName
+        | [| fullQualifiedTypeName |] -> fullQualifiedTypeName
+        | _ -> "azure-native:unknown:unknown"

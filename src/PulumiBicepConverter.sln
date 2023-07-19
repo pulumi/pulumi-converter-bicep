@@ -10,6 +10,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Tests", "Tests\Tests.fsproj
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Converter", "Converter\Converter.fsproj", "{C9DB9CAF-A04C-4205-9E94-77472B031089}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LocalTester", "LocalTester\LocalTester.fsproj", "{96899EED-0FC1-420B-BA2B-A90AF67C7321}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,11 @@ Global
 		{C9DB9CAF-A04C-4205-9E94-77472B031089}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C9DB9CAF-A04C-4205-9E94-77472B031089}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C9DB9CAF-A04C-4205-9E94-77472B031089}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96899EED-0FC1-420B-BA2B-A90AF67C7321}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96899EED-0FC1-420B-BA2B-A90AF67C7321}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96899EED-0FC1-420B-BA2B-A90AF67C7321}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96899EED-0FC1-420B-BA2B-A90AF67C7321}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
 	EndGlobalSection
 EndGlobal

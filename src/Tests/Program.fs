@@ -1,5 +1,4 @@
-﻿open System.Diagnostics
-open Converter.PulumiTypes
+﻿open Converter.PulumiTypes
 open Expecto
 open Converter
 open Converter.BicepParser
@@ -208,6 +207,53 @@ resource networkSecurityGroups 'Microsoft.Network/networkSecurityGroups@2020-06-
         Expect.equal expectedForLoop networkSecurityGroups.value "The resource body is parsed correctly"
     }
     
+    test "parameterizing bicep program by resource group works" {
+        let program = parseOrFail """
+param location string = resourceGroup().location
+resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+  location: resourceGroup().location
+}
+
+resource anotherStorageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+   location: location
+   scope: resourceGroup()
+}
+"""
+        let parameterizedProgram =
+            program
+            |> BicepProgram.simplifyResourceGroupScoping
+            |> BicepProgram.parameterizeResourceGroupScoping
+
+        Expect.equal parameterizedProgram.declarations.Length 5 "There are 5 declarations"
+        
+        let resourceGroupName = BicepProgram.findParameter "resourceGroupName" parameterizedProgram
+        Expect.equal resourceGroupName.parameterType (Some "string") "parameter type is correct"
+        
+        let param = BicepProgram.findParameter "location" parameterizedProgram
+        Expect.equal param.name "location" "Name is correct"
+        Expect.equal param.parameterType (Some "string") "Type is correct"
+        let defaultValue = BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "currentResourceGroup", "location")
+        Expect.equal param.defaultValue (Some defaultValue) "Default value is correct"
+        
+        let storageAccount = BicepProgram.findResource "storageAccount" parameterizedProgram
+        let expectedStorageAccountInputs = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "location", BicepSyntax.PropertyAccess(
+                BicepSyntax.VariableAccess "currentResourceGroup", "location")
+            BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                BicepSyntax.VariableAccess "currentResourceGroup", "name")
+        ])
+        
+        Expect.equal storageAccount.value expectedStorageAccountInputs "Inputs are transformed correctly"
+        
+        let anotherStorageAccount = BicepProgram.findResource "anotherStorageAccount" parameterizedProgram
+        let expectedInputs = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "location", BicepSyntax.VariableAccess "location"
+            BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                BicepSyntax.VariableAccess "currentResourceGroup", "name")
+        ])
+        Expect.equal anotherStorageAccount.value expectedInputs "Inputs are transformed correctly"
+    }
+    
     test "parsing module declaration should work" {
         let program = parseOrFail """
 module storageModule '../storageAccount.bicep' = {
@@ -232,192 +278,67 @@ module storageModule '../storageAccount.bicep' = {
 ]
 
 let resourceTokenMappingTests = testList "Resource token mapping" [
-    test "example with network security groups" {
+    test "Microsoft.Network/networkSecurityGroups@2020-06-01" {
         let azureSpecToken = "Microsoft.Network/networkSecurityGroups@2020-06-01"
         let expectedPulumiToken = "azure-native:network/v20200601:NetworkSecurityGroup"
         let token = ResourceTokens.fromAzureSpecToPulumi azureSpecToken
         Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
 
-    test "example with storage account" {
+    test "Microsoft.Storage/storageAccounts@2021-02-01" {
         let azureSpecToken = "Microsoft.Storage/storageAccounts@2021-02-01"
         let expectedPulumiToken = "azure-native:storage/v20210201:StorageAccount"
         let token = ResourceTokens.fromAzureSpecToPulumi azureSpecToken
         Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
     
-    test "example without version" {
+    test "Microsoft.Storage/storageAccounts" {
         let azureSpecToken = "Microsoft.Storage/storageAccounts"
         let expectedPulumiToken = "azure-native:storage:StorageAccount"
         let token = ResourceTokens.fromAzureSpecToPulumi azureSpecToken
         Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
     
-    test "full program conversion" {
-        let program = parseOrFail """
-@description('name of the new virtual network where DNS resolver will be created')
-param resolverVNETName string = 'dnsresolverVNET'
-
-@description('the IP address space for the resolver virtual network')
-param resolverVNETAddressSpace string = '10.7.0.0/24'
-
-@description('name of the dns private resolver')
-param dnsResolverName string = 'dnsResolver'
-
-@description('the location for resolver VNET and dns private resolver - Azure DNS Private Resolver available in specific region, refer the documenation to select the supported region for this deployment. For more information https://docs.microsoft.com/azure/dns/dns-private-resolver-overview#regional-availability')
-param location string
-
-@description('name of the subnet that will be used for private resolver inbound endpoint')
-param inboundSubnet string = 'snet-inbound'
-
-@description('the inbound endpoint subnet address space')
-param inboundAddressPrefix string = '10.7.0.0/28'
-
-@description('name of the subnet that will be used for private resolver outbound endpoint')
-param outboundSubnet string = 'snet-outbound'
-
-@description('the outbound endpoint subnet address space')
-param outboundAddressPrefix string = '10.7.0.16/28'
-
-@description('name of the vnet link that links outbound endpoint with forwarding rule set')
-param resolvervnetlink string = 'vnetlink'
-
-@description('name of the forwarding ruleset')
-param forwardingRulesetName string = 'forwardingRule'
-
-@description('name of the forwarding rule name')
-param forwardingRuleName string = 'contosocom'
-
-@description('the target domain name for the forwarding ruleset')
-param DomainName string = 'contoso.com.'
-
-@description('the list of target DNS servers ip address and the port number for conditional forwarding')
-param targetDNS array = [
-  {
-    ipaddress: '10.0.0.4'
-    port: 53
-  }
-  {
-    ipaddress: '10.0.0.5'
-    port: 53
-  }
-]
-
-resource resolver 'Microsoft.Network/dnsResolvers@2022-07-01' = {
-  name: dnsResolverName
-  location: location
-  properties: {
-    virtualNetwork: {
-      id: resolverVnet.id
+    test "Microsoft.Network/dnsResolvers/inboundEndpoints@2022-07-01" {
+        let azureSpecToken = "Microsoft.Network/dnsResolvers/inboundEndpoints@2022-07-01"
+        let expectedPulumiToken = "azure-native:network/v20220701:InboundEndpoint"
+        let token = ResourceTokens.fromAzureSpecToPulumi azureSpecToken
+        Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
-  }
-}
-
-resource inEndpoint 'Microsoft.Network/dnsResolvers/inboundEndpoints@2022-07-01' = {
-  parent: resolver
-  name: inboundSubnet
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        privateIpAllocationMethod: 'Dynamic'
-        subnet: {
-          id: '${resolverVnet.id}/subnets/${inboundSubnet}'
-        }
-      }
-    ]
-  }
-}
-
-resource outEndpoint 'Microsoft.Network/dnsResolvers/outboundEndpoints@2022-07-01' = {
-  parent: resolver
-  name: outboundSubnet
-  location: location
-  properties: {
-    subnet: {
-      id: '${resolverVnet.id}/subnets/${outboundSubnet}'
+    
+    test "Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks@2022-07-01" {
+        let azureSpecToken = "Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks@2022-07-01"
+        let expectedPulumiToken = "azure-native:network/v20220701:VirtualNetworkLink"
+        let token = ResourceTokens.fromAzureSpecToPulumi azureSpecToken
+        Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
-  }
-}
-
-resource fwruleSet 'Microsoft.Network/dnsForwardingRulesets@2022-07-01' = {
-  name: forwardingRulesetName
-  location: location
-  properties: {
-    dnsResolverOutboundEndpoints: [
-      {
-        id: outEndpoint.id
-      }
-    ]
-  }
-}
-
-resource resolverLink 'Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks@2022-07-01' = {
-  parent: fwruleSet
-  name: resolvervnetlink
-  properties: {
-    virtualNetwork: {
-      id: resolverVnet.id
+    
+    test "Without version Microsoft.Network/networkSecurityGroups@2020-06-01" {
+        let azureSpecToken = "Microsoft.Network/networkSecurityGroups@2020-06-01"
+        let expectedPulumiToken = "azure-native:network:NetworkSecurityGroup"
+        let token = ResourceTokens.fromAzureSpecToPulumiWithoutVersion azureSpecToken
+        Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
-  }
-}
 
-resource fwRules 'Microsoft.Network/dnsForwardingRulesets/forwardingRules@2022-07-01' = {
-  parent: fwruleSet
-  name: forwardingRuleName
-  properties: {
-    domainName: DomainName
-    targetDnsServers: targetDNS
-  }
-}
-
-resource resolverVnet 'Microsoft.Network/virtualNetworks@2022-01-01' = {
-  name: resolverVNETName
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        resolverVNETAddressSpace
-      ]
+    test "Without version Microsoft.Storage/storageAccounts@2021-02-01" {
+        let azureSpecToken = "Microsoft.Storage/storageAccounts@2021-02-01"
+        let expectedPulumiToken = "azure-native:storage:StorageAccount"
+        let token = ResourceTokens.fromAzureSpecToPulumiWithoutVersion azureSpecToken
+        Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
-    enableDdosProtection: false
-    enableVmProtection: false
-    subnets: [
-      {
-        name: inboundSubnet
-        properties: {
-          addressPrefix: inboundAddressPrefix
-          delegations: [
-            {
-              name: 'Microsoft.Network.dnsResolvers'
-              properties: {
-                serviceName: 'Microsoft.Network/dnsResolvers'
-              }
-            }
-          ]
-        }
-      }
-      {
-        name: outboundSubnet
-        properties: {
-          addressPrefix: outboundAddressPrefix
-          delegations: [
-            {
-              name: 'Microsoft.Network.dnsResolvers'
-              properties: {
-                serviceName: 'Microsoft.Network/dnsResolvers'
-              }
-            }
-          ]
-        }
-      }
-    ]
-  }
-}
-"""
-        let pulumiProgram = Transform.bicepProgram program
-        let programText = Printer.printProgram pulumiProgram
-        Expect.isNotEmpty programText "there is text"
+    
+    test "Without version Microsoft.Network/dnsResolvers/inboundEndpoints@2022-07-01" {
+        let azureSpecToken = "Microsoft.Network/dnsResolvers/inboundEndpoints@2022-07-01"
+        let expectedPulumiToken = "azure-native:network:InboundEndpoint"
+        let token = ResourceTokens.fromAzureSpecToPulumiWithoutVersion azureSpecToken
+        Expect.equal expectedPulumiToken token "Token is correctly mapped"
+    }
+    
+    test "Without version Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks@2022-07-01" {
+        let azureSpecToken = "Microsoft.Network/dnsForwardingRulesets/virtualNetworkLinks@2022-07-01"
+        let expectedPulumiToken = "azure-native:network:VirtualNetworkLink"
+        let token = ResourceTokens.fromAzureSpecToPulumiWithoutVersion azureSpecToken
+        Expect.equal expectedPulumiToken token "Token is correctly mapped"
     }
 ]
 
@@ -528,7 +449,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
         match Transform.bicepResource exampleStorage program with
         | Some pulumiResource ->
             Expect.equal pulumiResource.name "exampleStorage" "The name is correct"
-            Expect.equal pulumiResource.token "azure-native:storage/v20210201:StorageAccount" "token is correct"
+            Expect.equal pulumiResource.token "azure-native:storage:StorageAccount" "token is correct"
             let expectedResourceInputs = Map.ofList [
                 "location", PulumiSyntax.String "eastus"
                 "kind", PulumiSyntax.String "StorageV2"
@@ -541,6 +462,66 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
             Expect.equal pulumiResource.logicalName (Some "storage") "logical name is extracted correctly"
         | None ->
             failwith "Couldn't transform resource 'exampleStorage'"
+    }
+
+    test "resource group scoping is modified to resourceGroupName"  {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  location: 'eastus'
+  scope: resourceGroup()
+}
+"""
+        
+        let simplifiedProgram = program |> BicepProgram.simplifyResourceGroupScoping 
+        let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
+        let expectedResourceBody = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
+            BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                BicepSyntax.FunctionCall("resourceGroup", [  ]),
+                "name")
+        ])
+        
+        Expect.equal exampleStorage.value expectedResourceBody "The resource body is simplified correctly"
+    }
+    
+    test "resource group scoping is modified to resourceGroupName when referencing a resource group"  {
+        let program = parseOrFail """
+param resourceGroupName string
+var currentResourceGroup = resourceGroup(resourceGroupName)
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  location: 'eastus'
+  scope: currentResourceGroup
+}
+"""
+        
+        let simplifiedProgram = program |> BicepProgram.simplifyResourceGroupScoping 
+        let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
+        let expectedResourceBody = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
+            BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                BicepSyntax.VariableAccess "currentResourceGroup", "name")
+        ])
+        
+        Expect.equal exampleStorage.value expectedResourceBody "The resource body is simplified correctly"
+    }
+    
+    test "resource group scoping is modified to remove scope when using subscription"  {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  location: 'eastus'
+  scope: subscription().id
+}
+"""
+
+        let simplifiedProgram = program |> BicepProgram.simplifyResourceGroupScoping 
+        let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
+        let expectedResourceBody = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
+            BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                BicepSyntax.FunctionCall("resourceGroup", [  ]), "name")
+        ])
+        
+        Expect.equal exampleStorage.value expectedResourceBody "The resource body is simplified correctly"
     }
     
     test "resource input odata.type is normalized to odataType"  {
@@ -585,7 +566,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = if (cre
         match Transform.bicepResource exampleStorage program with
         | Some pulumiResource ->
             Expect.equal pulumiResource.name "exampleStorage" "The name is correct"
-            Expect.equal pulumiResource.token "azure-native:storage/v20210201:StorageAccount" "token is correct"
+            Expect.equal pulumiResource.token "azure-native:storage:StorageAccount" "token is correct"
             let expectedResourceInputs = Map.ofList [
                 "location", PulumiSyntax.String "eastus"
                 "kind", PulumiSyntax.String "StorageV2"
@@ -633,6 +614,46 @@ module storageModule '../storageAccount.bicep' = {
             Expect.equal componentDecl.inputs expectedInputs "inputs are correct"
     }
     
+    test "accessing resource properties is reduced" {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = { 
+  name: 'storage'
+  kind: 'StorageV2'
+  sku: {
+    name: 'Standard_LRS'
+  }
+}
+
+output storageEndpoint object = exampleStorage.properties.primaryEndpoints
+"""
+        let storageEndpoint = BicepProgram.findOutput "storageEndpoint" program
+        let pulumiOutput = Transform.bicepOutput storageEndpoint program
+        Expect.equal pulumiOutput.name "storageEndpoint" "name is correct"
+        let expectedValue = PulumiSyntax.PropertyAccess(
+            PulumiSyntax.VariableAccess "exampleStorage", "primaryEndpoints")
+        
+        Expect.equal pulumiOutput.value expectedValue "value is correct"
+    }
+    
+    test "accessing module outputs is reduced" {
+        let program = parseOrFail """
+module exampleStorage '../storageAccount.bicep' = { 
+  params: {
+    name: 'Standard_LRS'
+  }
+}
+
+output storageData object = exampleStorage.outputs.data
+"""
+        let storageData = BicepProgram.findOutput "storageData" program
+        let pulumiOutput = Transform.bicepOutput storageData program
+        Expect.equal pulumiOutput.name "storageData" "name is correct"
+        let expectedValue = PulumiSyntax.PropertyAccess(
+            PulumiSyntax.VariableAccess "exampleStorage", "data")
+        
+        Expect.equal pulumiOutput.value expectedValue "value is correct"
+    }
+    
     test "resource with range(0, x) can be transformed into a simple count" {
         let program = parseOrFail """
 param locations array = ['eastus', 'westus']
@@ -650,7 +671,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for in
         match Transform.bicepResource exampleStorage program with
         | Some pulumiResource ->
             Expect.equal pulumiResource.name "exampleStorage" "The name is correct"
-            Expect.equal pulumiResource.token "azure-native:storage/v20210201:StorageAccount" "token is correct"
+            Expect.equal pulumiResource.token "azure-native:storage:StorageAccount" "token is correct"
             let expectedResourceInputs = Map.ofList [
                 // location = locations[index] is converted to location = locations[range.value]
                 "location", PulumiSyntax.IndexExpression(
@@ -679,6 +700,34 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for in
             failwith "Couldn't transform resource 'exampleStorage'"
     }
     
+    test "resource properties are collapsed with top-level attributes" {
+        let program = parseOrFail """
+resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
+  kind: 'StorageV2'
+  properties: {
+    supportsHttpsTrafficOnly: true
+    nested: {
+      data: 42
+    }
+  }
+}
+"""
+    
+        let storage = BicepProgram.findResource "storage" program
+        match Transform.bicepResource storage program with
+        | None -> failwith "failed to transform resource"
+        | Some resource ->
+            let expectedInputs = Map.ofList [
+                "kind", PulumiSyntax.String "StorageV2"
+                "supportsHttpsTrafficOnly", PulumiSyntax.Boolean true
+                "nested", PulumiSyntax.Object (Map.ofList [
+                    PulumiSyntax.Identifier "data", PulumiSyntax.Integer 42L
+                ])
+            ]
+            
+            Expect.equal resource.inputs expectedInputs "Properties are collapsed correctly"
+    }
+    
     test "resource iterating over generic collection can be transformed into range" {
         let program = parseOrFail """
 param locations array = ['eastus', 'westus']
@@ -692,7 +741,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for (l
         match Transform.bicepResource exampleStorage program with
         | Some pulumiResource ->
             Expect.equal pulumiResource.name "exampleStorage" "The name is correct"
-            Expect.equal pulumiResource.token "azure-native:storage/v20210201:StorageAccount" "token is correct"
+            Expect.equal pulumiResource.token "azure-native:storage:StorageAccount" "token is correct"
             let expectedResourceInputs = Map.ofList [
                 // location = locations[index] is converted to location = locations[range.key]
                 "location", PulumiSyntax.IndexExpression(
