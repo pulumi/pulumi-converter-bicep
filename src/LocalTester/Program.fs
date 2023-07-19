@@ -53,41 +53,46 @@ let rec findParent (directory: string) (fileToFind: string) =
 
 let repositoryRoot = findParent __SOURCE_DIRECTORY__ "README.md"
 
-
 [<EntryPoint>]
 let main (args: string[]) =
-    let integrationTests = Path.Combine(repositoryRoot, "integration_tests")
-    let directories = Directory.EnumerateDirectories integrationTests
-    for example in directories do
-        let name = DirectoryInfo(example).Name
-        let bicepFilePath = Path.Combine(example, $"{name}.bicep")
-        if not (File.Exists bicepFilePath) then
-            printfn $"Couldn't find bicep file at {bicepFilePath}"
-        else
-            let content = File.ReadAllText bicepFilePath
-            match BicepParser.parse content with
-            | Error error ->
-                printfn $"Failed to parse bicep file at {bicepFilePath}: {error}"
-            | Ok bicepProgram ->
-                let program =
-                    bicepProgram
-                    |> BicepProgram.simplifyScoping
-                    |> BicepProgram.parameterizeByResourceGroup
-                    |> Transform.bicepProgram
+    try
+        
+        let integrationTests = Path.Combine(repositoryRoot, "integration_tests")
+        let directories = Directory.EnumerateDirectories integrationTests
+        for example in directories do
+            let name = DirectoryInfo(example).Name
+            let bicepFilePath = Path.Combine(example, $"{name}.bicep")
+            if not (File.Exists bicepFilePath) then
+                printfn $"Couldn't find bicep file at {bicepFilePath}"
+            else
+                let content = File.ReadAllText bicepFilePath
+                match BicepParser.parse content with
+                | Error error ->
+                    printfn $"Failed to parse bicep file at {bicepFilePath}: {error}"
+                | Ok bicepProgram ->
+                    let program =
+                        bicepProgram
+                        |> BicepProgram.simplifyScoping
+                        |> BicepProgram.parameterizeByResourceGroup
+                        |> Transform.bicepProgram
 
-                let pulumiProgramText = Printer.printProgram program
-                let pclFilePath = Path.Combine(example, "main.pp")
-                File.WriteAllText(pclFilePath, pulumiProgramText)
-                printfn $"Converter bicep into Pulumi at {pclFilePath}"
-                let conversion =
-                    convertTypescript example
-                    |> Async.AwaitTask
-                    |> Async.RunSynchronously
+                    let pulumiProgramText = Printer.printProgram program
+                    let pclFilePath = Path.Combine(example, "main.pp")
+                    File.WriteAllText(pclFilePath, pulumiProgramText)
+                    printfn $"Converted bicep into Pulumi at {pclFilePath}"
+                    let conversion =
+                        convertTypescript example
+                        |> Async.AwaitTask
+                        |> Async.RunSynchronously
 
-                match conversion with
-                | Error errorMessage ->
-                    printfn $"Failed to convert Pulumi program to TypeScript: {errorMessage}"
-                
-                | Ok _ ->
-                    printfn $"Successfully converted {bicepFilePath} to TypeScript"
-    0
+                    match conversion with
+                    | Error errorMessage ->
+                        failwithf $"Failed to convert Pulumi program to TypeScript: {errorMessage}"
+
+                    | Ok _ ->
+                        printfn $"Successfully converted {bicepFilePath} to TypeScript"
+        0
+    with
+    | ex ->
+        printfn $"Error occured: {ex.Message}"
+        1
