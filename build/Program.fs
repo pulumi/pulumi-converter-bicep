@@ -86,12 +86,28 @@ let parseSchemaFromPulumi(pluginName: string) =
     |> Async.RunSynchronously
 
 
+let runTests() =
+    if Shell.Exec("dotnet", "run", Path.Combine(repositoryRoot, "src", "Tests")) <> 0
+    then failwithf "Unit tests failed"
 
+let integrationTests() =
+    if Shell.Exec("dotnet", "run", Path.Combine(repositoryRoot, "src", "LocalTester")) <> 0
+    then failwithf "Integration tests failed"
+
+let buildSolution() =
+    if Shell.Exec("dotnet", "build -c Release", Path.Combine(repositoryRoot, "src")) <> 0
+    then failwithf "Build failed"
 
 [<EntryPoint>]
 let main(args: string[]) : int =
     match args with
     | [| "sync-proto-files" |] -> syncProtoFiles()
+    | [| "tests" |] ->
+        runTests()
+    | [| "integration-tests" |] ->
+        integrationTests()
+    | [| "build" |] ->
+        buildSolution()
     | [| "write-schema-subset"  |] ->
         match parseSchemaFromPulumi "azure-native" with
         | Error errorMessage -> printfn $"couldn't parse azure-native schema: {errorMessage}"
