@@ -12,9 +12,36 @@ config storageSKU "string" {
 config location "string" {
     default = currentResourceGroup.location
 }
+storageLocations = [
+"east",
+"west"
+]
+
 resource storage "azure-native:storage:StorageAccount" {
     kind = "StorageV2"
     location = location
+    resourceGroupName = currentResourceGroup.name
+    sku = {
+    name = storageSKU
+    }
+}
+resource storageAccounts "azure-native:storage:StorageAccount" {
+    options {
+        range = 10
+}
+    kind = "StorageV2"
+    location = location
+    resourceGroupName = currentResourceGroup.name
+    sku = {
+    name = storageSKU
+    }
+}
+resource storageAccountsByLocation "azure-native:storage:StorageAccount" {
+    options {
+        range = storageLocations
+}
+    kind = "StorageV2"
+    location = range.value
     resourceGroupName = currentResourceGroup.name
     sku = {
     name = storageSKU

@@ -221,8 +221,8 @@ resource anotherStorageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = 
 """
         let parameterizedProgram =
             program
-            |> BicepProgram.simplifyResourceGroupScoping
-            |> BicepProgram.parameterizeResourceGroupScoping
+            |> BicepProgram.simplifyScoping
+            |> BicepProgram.parameterizeByResourceGroup
 
         Expect.equal parameterizedProgram.declarations.Length 5 "There are 5 declarations"
         
@@ -472,7 +472,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 """
         
-        let simplifiedProgram = program |> BicepProgram.simplifyResourceGroupScoping 
+        let simplifiedProgram = program |> BicepProgram.simplifyScoping 
         let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
         let expectedResourceBody = BicepSyntax.Object(Map.ofList [
             BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
@@ -494,7 +494,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 """
         
-        let simplifiedProgram = program |> BicepProgram.simplifyResourceGroupScoping 
+        let simplifiedProgram = program |> BicepProgram.simplifyScoping 
         let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
         let expectedResourceBody = BicepSyntax.Object(Map.ofList [
             BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
@@ -513,7 +513,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 """
 
-        let simplifiedProgram = program |> BicepProgram.simplifyResourceGroupScoping 
+        let simplifiedProgram = program |> BicepProgram.simplifyScoping 
         let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
         let expectedResourceBody = BicepSyntax.Object(Map.ofList [
             BicepSyntax.Identifier "location", BicepSyntax.String "eastus"

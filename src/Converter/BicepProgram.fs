@@ -215,7 +215,7 @@ let programReplace (replacements: Map<BicepSyntax, BicepSyntax>) (bicepProgram: 
         
     { declarations = modifiedDeclarations }
 
-let simplifyResourceGroupScoping (bicepProgram: BicepProgram) : BicepProgram =
+let simplifyScoping (bicepProgram: BicepProgram) : BicepProgram =
     let simplifyResourceProperties properties token =
         let modifiedProperties = Map.ofList [
             for key, value in Map.toList properties do 
@@ -271,12 +271,12 @@ let simplifyResourceGroupScoping (bicepProgram: BicepProgram) : BicepProgram =
                 | BicepSyntax.Object properties ->
                     let modifiedProperties = simplifyResourceProperties properties resource.token
                     BicepDeclaration.Resource { resource with value = modifiedProperties }
-                    
+
                 | BicepSyntax.IfCondition (condition, BicepSyntax.Object properties) ->
                     let modifiedProperties = simplifyResourceProperties properties resource.token
                     let modifiedIfCondition = BicepSyntax.IfCondition(condition, modifiedProperties)
                     BicepDeclaration.Resource { resource with value = modifiedIfCondition }
-                    
+
                 | BicepSyntax.For forSyntax ->
                     match forSyntax.body with
                     | BicepSyntax.Object properties ->
@@ -292,7 +292,7 @@ let simplifyResourceGroupScoping (bicepProgram: BicepProgram) : BicepProgram =
         
     { declarations = modifiedDeclarations  }
 
-let parameterizeResourceGroupScoping (bicepProgram: BicepProgram) : BicepProgram =
+let parameterizeByResourceGroup (bicepProgram: BicepProgram) : BicepProgram =
     let containsImplicitResourceGroup =
         bicepProgram
         |> programContains (function

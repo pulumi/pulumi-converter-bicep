@@ -71,10 +71,10 @@ let main (args: string[]) =
             | Ok bicepProgram ->
                 let program =
                     bicepProgram
-                    |> BicepProgram.simplifyResourceGroupScoping
-                    |> BicepProgram.parameterizeResourceGroupScoping
+                    |> BicepProgram.simplifyScoping
+                    |> BicepProgram.parameterizeByResourceGroup
                     |> Transform.bicepProgram
-                
+
                 let pulumiProgramText = Printer.printProgram program
                 let pclFilePath = Path.Combine(example, "main.pp")
                 File.WriteAllText(pclFilePath, pulumiProgramText)
@@ -83,7 +83,7 @@ let main (args: string[]) =
                     convertTypescript example
                     |> Async.AwaitTask
                     |> Async.RunSynchronously
-                    
+
                 match conversion with
                 | Error errorMessage ->
                     printfn $"Failed to convert Pulumi program to TypeScript: {errorMessage}"

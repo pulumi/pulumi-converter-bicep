@@ -56,6 +56,12 @@ let rec print (expression: PulumiSyntax) (indentSize: int) (builder: StringBuild
                 
         append ")"
 
+    | PulumiSyntax.TernaryExpression (condition, trueResult, falseResult) ->
+        print condition indentSize builder
+        append " ? "
+        print trueResult indentSize builder
+        append " : "
+        print falseResult indentSize builder
     | _ ->
         ()
 

@@ -10,6 +10,10 @@ const currentResourceGroup = azure_native.resources.getResourceGroupOutput({
 const storagePrefix = config.require("storagePrefix");
 const storageSKU = config.get("storageSKU") || "Standard_LRS";
 const location = config.get("location") || currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.location);
+const storageLocations = [
+    "east",
+    "west",
+];
 const storage = new azure_native.storage.StorageAccount("storage", {
     kind: "StorageV2",
     location: location,
@@ -18,4 +22,26 @@ const storage = new azure_native.storage.StorageAccount("storage", {
         name: storageSKU,
     },
 });
+const storageAccounts: azure_native.storage.StorageAccount[] = [];
+for (const range = {value: 0}; range.value < 10; range.value++) {
+    storageAccounts.push(new azure_native.storage.StorageAccount(`storageAccounts-${range.value}`, {
+        kind: "StorageV2",
+        location: location,
+        resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
+        sku: {
+            name: storageSKU,
+        },
+    }));
+}
+const storageAccountsByLocation: azure_native.storage.StorageAccount[] = [];
+for (const range of storageLocations.map((v, k) => ({key: k, value: v}))) {
+    storageAccountsByLocation.push(new azure_native.storage.StorageAccount(`storageAccountsByLocation-${range.key}`, {
+        kind: "StorageV2",
+        location: range.value,
+        resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
+        sku: {
+            name: storageSKU,
+        },
+    }));
+}
 export const storageEndpoint = storage.primaryEndpoints;
