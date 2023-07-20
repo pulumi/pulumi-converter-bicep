@@ -8,6 +8,7 @@ open Publish
 open CliWrap
 open CliWrap.Buffered
 open System.Text
+open Fastenshtein
 
 /// Recursively tries to find the parent of a file starting from a directory
 let rec findParent (directory: string) (fileToFind: string) =
@@ -139,10 +140,14 @@ let main(args: string[]) : int =
                                 |> List.filter (fun (inputProperty, property) ->
                                     let propertyName = inputProperty.ToLower()
                                     propertyName <> "resourcegroupname" && propertyName.EndsWith "name" && property.required)
-                                |> List.tryHead
+                                |> List.map fst
                                 |> function
-                                    | None -> []
-                                    | Some (propertyName, _) -> [ getterInvokeToken, propertyName ]
+                                    | [] -> []
+                                    | elements when List.contains "name" elements -> [ getterInvokeToken, "name" ]
+                                    | elements ->
+                                        elements
+                                        |> List.minBy (fun property -> Levenshtein.Distance(property,resourceName))
+                                        |> fun value -> [ getterInvokeToken, value ]
                         | None -> []
                     | _ -> [])
                 |> List.append [ "azure-native:resources:getResourceGroup", "resourceGroupName" ]

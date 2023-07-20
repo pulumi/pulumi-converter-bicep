@@ -45,8 +45,7 @@ let fromAzureSpecToPulumiWithoutVersion(token: string) =
         | [| fullQualifiedTypeName; version |] -> fromAzureSpecToPulumi fullQualifiedTypeName
         | [| fullQualifiedTypeName |] -> fullQualifiedTypeName
         | _ -> "azure-native:unknown:unknown"
-        
-        
+
 let fromAzureSpecToExistingResourceToken (token: string) =
     match token.Split "@" with
     | [| fullQualifiedTypeName; version |] ->
