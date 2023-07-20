@@ -120,7 +120,7 @@ let main(args: string[]) : int =
                     | Some property -> property.required
                     | _ -> false)
                |> List.map fst
-               
+
             let mainParameterToQueryExistingResources =
                 azureNativeSchema.resources
                 |> Map.toList
@@ -145,6 +145,7 @@ let main(args: string[]) : int =
                                     | Some (propertyName, _) -> [ getterInvokeToken, propertyName ]
                         | None -> []
                     | _ -> [])
+                |> List.append [ "azure-native:resources:getResourceGroup", "resourceGroupName" ]
                
             printfn $"There are {resourcesWhichRequireResourceGroupName.Length} resources which require resourceGroupName"
             let targetFile = Path.Combine(repositoryRoot, "src", "Converter", "Schema.fs")

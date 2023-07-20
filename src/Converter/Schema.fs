@@ -1573,6 +1573,7 @@ let resourcesWhichRequireResourceGroupName = [|
 |]
 
 let nameParameterForExistingResources = Map.ofArray [|
+   "azure-native:resources:getResourceGroup", "resourceGroupName"
    "azure-native:aad:getDomainService", "domainServiceName"
    "azure-native:aad:getOuContainer", "domainServiceName"
    "azure-native:aadiam:getAzureADMetric", "azureADMetricsName"

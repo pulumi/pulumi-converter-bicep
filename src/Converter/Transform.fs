@@ -27,13 +27,10 @@ let transformFunction name args program =
             for key, value in Map.toList properties do
                 match key with
                 | BicepSyntax.Identifier "name" ->
-                    if invokeToken = "azure-native:resources:getResourceGroup" then
-                        yield "resourceGroupName", fromBicep value program
-                    else
-                        match Map.tryFind invokeToken Schema.nameParameterForExistingResources with
-                        | Some specificNameParameter ->
-                            yield specificNameParameter, fromBicep value program
-                        | None -> ()
+                    match Map.tryFind invokeToken Schema.nameParameterForExistingResources with
+                    | Some specificNameParameter ->
+                        yield specificNameParameter, fromBicep value program
+                    | None -> ()
                 | BicepSyntax.Identifier other ->
                     yield other, fromBicep value program
                 | _ -> ()
