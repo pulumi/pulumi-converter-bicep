@@ -1,11 +1,11 @@
 # pulumi-converter-bicep
 
-A Pulumi converter plugin to convert Bicep files to Pulumi languages.
+A Pulumi converter plugin to convert Bicep files to Pulumi languages. Currently work in progress.
 
 ### Installation
 
 ```
-pulumi plugin install converter bicep 0.1.0 --server github://api.github.com/Zaid-Ajaj
+pulumi plugin install converter bicep <release-version> --server github://api.github.com/Zaid-Ajaj
 ```
 
 ### Usage
@@ -13,7 +13,7 @@ In a directory with a single Bicep file, run the following command:
 ```
 pulumi convert --from bicep --language <language> --out pulumi
 ```
-Will convert Bicep code into your language of choice
+Will convert Bicep code into your language of choice: `typescript`, `csharp`, `python`, `go`, `java` or `yaml`
 
 ## Development
 

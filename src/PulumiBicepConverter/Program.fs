@@ -69,7 +69,7 @@ appBuilder.WebHost.UseSetting("urls", $"http://localhost:{port}") |> ignore
 appBuilder.Logging.ClearProviders() |> ignore
 
 // write out the port so that Pulumi knows which port to connect to
-printfn $"{port}"
+printfn $"{port}\n"
 
 // Run the application
 let app = appBuilder.Build()

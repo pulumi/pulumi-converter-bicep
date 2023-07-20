@@ -120,6 +120,7 @@ let createTarGz (source: string) (target: string)  =
     let tarArchive = TarArchive.CreateOutputTarArchive(gzipOutput);
     for file in Directory.GetFiles source do
         let tarEntry = TarEntry.CreateEntryFromFile file
+        tarEntry.Name <- Path.GetFileName file
         tarArchive.WriteEntry(tarEntry, false)
     tarArchive.Close()
 
