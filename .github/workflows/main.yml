@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [ "**" ]
 
+permissions: write-all
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
