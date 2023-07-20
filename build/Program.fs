@@ -12,6 +12,8 @@ open System.Text
 open Fastenshtein
 open System.Formats.Tar
 open Octokit
+open ICSharpCode.SharpZipLib.Tar
+open ICSharpCode.SharpZipLib.GZip
 
 /// Recursively tries to find the parent of a file starting from a directory
 let rec findParent (directory: string) (fileToFind: string) =
@@ -112,7 +114,16 @@ let converterVersion() =
     
 let artifacts = Path.Combine(repositoryRoot, "artifacts")
 
-let createArtifacts() =
+let createTarGz (source: string) (target: string)  =
+    let outStream = File.Create target
+    let gzipOutput = new GZipOutputStream(outStream)
+    let tarArchive = TarArchive.CreateOutputTarArchive(gzipOutput);
+    for file in Directory.GetFiles source do
+        let tarEntry = TarEntry.CreateEntryFromFile file
+        tarArchive.WriteEntry(tarEntry, false)
+    tarArchive.Close()
+
+let rec createArtifacts() =
     let version = converterVersion()
     let cwd = Path.Combine(repositoryRoot, "src", "PulumiBicepConverter")
     let runtimes = [
@@ -123,8 +134,7 @@ let createArtifacts() =
         "win-x64"
         "win-arm64"
     ]
-    
-    
+
     Shell.deleteDirs [
         Path.Combine(cwd, "bin")
         Path.Combine(cwd, "obj")
@@ -161,7 +171,7 @@ let createArtifacts() =
             | _ -> runtime
        
         let destination = Path.Combine(artifacts, $"{binary}-v{version}-{destinationRuntime}.tar.gz")
-        TarFile.CreateFromDirectory(publishPath, destination, false)
+        createTarGz publishPath destination
 
 let inline await (task: Task<'t>) = 
     task
@@ -176,6 +186,8 @@ let releaseVersion (release: Release) =
     else 
         ""
  
+
+    
 let createAndPublishArtifacts() =
     let version = converterVersion()
     let github = new GitHubClient(ProductHeaderValue "PulumiBicepConverter")
