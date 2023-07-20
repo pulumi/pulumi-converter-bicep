@@ -181,7 +181,12 @@ let createAndPublishArtifacts() =
     let github = new GitHubClient(ProductHeaderValue "PulumiBicepConverter")
     let githubToken = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
     // only assign github token to the client when it is available (usually in Github CI)
-    if not (isNull githubToken) then  github.Credentials <- Credentials(githubToken)
+    if not (isNull githubToken) then
+        printfn "GITHUB_TOKEN is available"
+        github.Credentials <- Credentials(githubToken)
+    else
+        printfn "GITHUB_TOKEN is not set"
+
     let githubUsername = "Zaid-Ajaj"
     let githubRepo = "pulumi-converter-bicep"
     let releases = await (github.Repository.Release.GetAll(githubUsername, githubRepo))
