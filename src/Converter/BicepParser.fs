@@ -238,13 +238,52 @@ let parse (text: string) : Result<BicepProgram, string> =
               })
 
           | :? ResourceDeclarationSyntax as resource ->
+
               match readSyntax (resource.TypeString :> SyntaxBase) with
               | BicepSyntax.String typeString ->
-                    declarations.Add(BicepDeclaration.Resource {
-                        name = resource.Name.IdentifierName
-                        token = typeString
-                        value = readSyntax resource.Value
-                    })
+                    if not (resource.IsExistingResource()) then
+                        declarations.Add(BicepDeclaration.Resource {
+                            name = resource.Name.IdentifierName
+                            token = typeString
+                            value = readSyntax resource.Value
+                        })
+                    else
+                        if typeString.StartsWith "Microsoft.Resources/resourceGroups" then
+                            // don't apply resource group scoping when accessing an existing resource group
+                            declarations.Add(BicepDeclaration.Variable {
+                                name = resource.Name.IdentifierName
+                                value = BicepSyntax.FunctionCall("getExistingResource", [
+                                    BicepSyntax.String typeString
+                                    readSyntax resource.Value
+                                ])
+                            })
+                        else
+                        match readSyntax resource.Value with
+                        | BicepSyntax.Object properties ->
+                            let modifiedProperties =
+                                match Map.tryFind (BicepSyntax.Identifier "scope") properties with
+                                | None ->
+                                    let newKey = BicepSyntax.Identifier "resourceGroupName"
+                                    let newValue = BicepSyntax.PropertyAccess(
+                                        BicepSyntax.FunctionCall("resourceGroup", [  ]), "name")
+                                        
+                                    properties
+                                    |> Map.add newKey newValue
+                                
+                                | Some scope ->
+                                    properties
+
+                            declarations.Add(BicepDeclaration.Variable {
+                                name = resource.Name.IdentifierName
+                                value = BicepSyntax.FunctionCall("getExistingResource", [
+                                    BicepSyntax.String typeString
+                                    BicepSyntax.Object modifiedProperties
+                                ])
+                            })
+                            
+                        | _ ->
+                            ()
+                           
               | _ ->
                   ()
 

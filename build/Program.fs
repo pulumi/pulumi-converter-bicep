@@ -121,16 +121,49 @@ let main(args: string[]) : int =
                     | _ -> false)
                |> List.map fst
                
+            let mainParameterToQueryExistingResources =
+                azureNativeSchema.resources
+                |> Map.toList
+                |> List.map fst
+                |> List.collect (fun token ->
+                    match token.Split ":" with
+                    | [| ns; moduleName; resourceName |] ->
+                        let getterInvokeToken = $"{ns}:{moduleName}:get{resourceName}"
+                        match Map.tryFind getterInvokeToken azureNativeSchema.functions with
+                        | Some functionSchema ->
+                            match functionSchema.inputs with
+                            | None -> [ ]
+                            | Some inputs ->
+                                inputs.properties
+                                |> Map.toList
+                                |> List.filter (fun (inputProperty, property) ->
+                                    let propertyName = inputProperty.ToLower()
+                                    propertyName <> "resourcegroupname" && propertyName.EndsWith "name" && property.required)
+                                |> List.tryHead
+                                |> function
+                                    | None -> []
+                                    | Some (propertyName, _) -> [ getterInvokeToken, propertyName ]
+                        | None -> []
+                    | _ -> [])
+               
             printfn $"There are {resourcesWhichRequireResourceGroupName.Length} resources which require resourceGroupName"
             let targetFile = Path.Combine(repositoryRoot, "src", "Converter", "Schema.fs")
             let content = StringBuilder()
             let append (input: string) = content.Append input |> ignore
-            append "module Converter.Schema\n"
+            append "module Converter.Schema\n\n"
             append "let resourcesWhichRequireResourceGroupName = [|\n"
             for resourceToken in resourcesWhichRequireResourceGroupName do
                 append $"   \"{resourceToken}\"\n"
             append "|]"
+            append "\n\n"
+            append "let nameParameterForExistingResources = Map.ofArray [|\n"
+            for invokeToken, parameterName in mainParameterToQueryExistingResources do
+                append $"   \"{invokeToken}\", \"{parameterName}\"\n"
+            append "|]"
+            append "\n\n"
+            
             File.WriteAllText(targetFile, content.ToString())
             printfn $"Written to {targetFile}"
+            
     | otherwise -> printfn $"Unknown build arguments provided %A{otherwise}"
     0

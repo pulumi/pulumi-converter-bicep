@@ -8,6 +8,20 @@ let rec print (expression: PulumiSyntax) (indentSize: int) (builder: StringBuild
     let indent() = append(String.replicate indentSize " ")
     match expression with
     | PulumiSyntax.String value -> append(sprintf $"\"{value}\"")
+    | PulumiSyntax.InterpolatedString (expressions, values) ->
+        let mutable expressionIndex = 0
+        let printExpr() =
+            if expressionIndex <= expressions.Length - 1 then
+                append "${"
+                print expressions[expressionIndex] indentSize builder
+                expressionIndex <- expressionIndex + 1
+                append "}"
+    
+        append "\""
+        for value in values do
+            append value
+            printExpr()
+        append "\""
     | PulumiSyntax.Integer value -> append(value.ToString())
     | PulumiSyntax.Identifier value -> append value
     | PulumiSyntax.Null -> append "null"
@@ -127,7 +141,7 @@ let printProgram(program: PulumiProgram) =
                     print dependsOn (indentSize + 8) builder
                     append "\n"
                 
-                append "}\n"
+                append "    }\n"
                 
             match resource.logicalName with
             | None -> ()
@@ -173,7 +187,7 @@ let printProgram(program: PulumiProgram) =
             | None -> ()
             | Some logicalName ->
                 append $"    __logicalName = \"{logicalName}\"\n"
-                
+
             for key, value in Map.toList componentDecl.inputs do
                 append $"    "
                 print key indentSize builder

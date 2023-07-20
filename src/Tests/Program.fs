@@ -1,4 +1,5 @@
-﻿open Converter.PulumiTypes
+﻿open System.Text
+open Converter.PulumiTypes
 open Expecto
 open Converter
 open Converter.BicepParser
@@ -92,6 +93,7 @@ param location string = currentResourceGroup.location
             BicepSyntax.PropertyAccess (BicepSyntax.VariableAccess "first", "second"),"third")
         Expect.equal expected expr "Nested property access is correctly parsed"
     }
+   
     
     test "parsing basic resource works" {
         let program = parseOrFail """
@@ -118,6 +120,25 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
         ])
 
         Expect.equal exampleStorage.value expectedResourceBody "Resource body is correctly parsed"
+    }
+    
+    test "parsing existing resource works" {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing = {
+  name: 'existingStorageName'
+}
+"""
+        let exampleStorage = BicepProgram.findVariable "exampleStorage" program
+        let expectedValue = BicepSyntax.FunctionCall("getExistingResource", [
+            BicepSyntax.String "Microsoft.Storage/storageAccounts@2021-02-01"
+            BicepSyntax.Object (Map.ofList [
+                BicepSyntax.Identifier "name", BicepSyntax.String "existingStorageName"
+                BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                    BicepSyntax.FunctionCall("resourceGroup", []), "name")
+            ])
+        ])
+
+        Expect.equal exampleStorage.value expectedValue "Value is transformed correctly"
     }
     
     test "parsing conditional resource works" {
@@ -700,6 +721,33 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for in
             failwith "Couldn't transform resource 'exampleStorage'"
     }
     
+    test "transform existing resource to invoke works" {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing = {
+  name: 'existingStorageName'
+}
+"""
+        let pulumiProgram =
+            program
+            |> BicepProgram.simplifyScoping
+            |> BicepProgram.parameterizeByResourceGroup
+            |> Transform.bicepProgram
+        
+        
+        let exampleStorage = Transform.findPulumiVariable "exampleStorage" pulumiProgram
+
+        let expectedValue = PulumiSyntax.FunctionCall("invoke", [
+            PulumiSyntax.String "azure-native:storage:getStorageAccount"
+            PulumiSyntax.Object (Map.ofList [
+                PulumiSyntax.Identifier "accountName", PulumiSyntax.String "existingStorageName"
+                PulumiSyntax.Identifier "resourceGroupName", PulumiSyntax.PropertyAccess(
+                    PulumiSyntax.VariableAccess "currentResourceGroup", "name")
+            ])
+        ])
+        
+        Expect.equal exampleStorage.value expectedValue "invoke is correctly translated"
+    }
+    
     test "resource properties are collapsed with top-level attributes" {
         let program = parseOrFail """
 resource storage 'Microsoft.Storage/storageAccounts@2021-04-01' = {
@@ -766,11 +814,34 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for (l
     }
 ]
 
+let printExpr (expr: BicepSyntax) =
+    let emptyProgram = { declarations = [] }
+    let builder = StringBuilder()
+    Printer.print (Transform.fromBicep expr emptyProgram) 0 builder
+    builder.ToString()
+
+let printTests = testList "Printing" [
+    test "printing interpolated strings" {
+        let exprAfter = printExpr(parseExpression "'storage-${1}'")
+        Expect.equal exprAfter "\"storage-${1}\"" "interpolated string printed"
+        
+        let exprBefore = printExpr(parseExpression "'${1}-storage'")
+        Expect.equal exprBefore "\"${1}-storage\"" "interpolated string printed"
+        
+        let exprInBetween = printExpr(parseExpression "'example-${1}-storage'")
+        Expect.equal exprInBetween "\"example-${1}-storage\"" "interpolated string printed"
+        
+        let exprMixed = printExpr (parseExpression "'hello-${1}-from-${2}-until-${3}'")
+        Expect.equal exprMixed "\"hello-${1}-from-${2}-until-${3}\"" "interpolated string printed"
+    }
+]
+
 let allTests = testList "All tests" [
     parameterParsingTests
     resourceTokenMappingTests
     configTypeInference
     resourceTransforms
+    printTests
 ]
 
 [<EntryPoint>]

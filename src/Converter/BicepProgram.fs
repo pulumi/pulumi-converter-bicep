@@ -22,6 +22,11 @@ let tryFindVariable (name: string) (program: BicepProgram) =
     |> function
         | Some (BicepDeclaration.Variable variable) -> Some variable
         | _ -> None
+        
+let findVariable (name: string) (program: BicepProgram) =
+    match tryFindVariable name program with
+    | Some variable -> variable
+    | None -> failwith $"Couldn't find variable {name}"
 
 let findParameter (name: string) (program: BicepProgram) =
     match tryFindParameter name program with
@@ -73,7 +78,13 @@ let isModuleDeclaration (name: string) (program: BicepProgram) =
 let isResourceDeclaration (name: string) (program: BicepProgram) =
     match tryFindResource name program with
     | Some resource -> true
-    | None -> false
+    | None ->
+        match tryFindVariable name program with
+        | None -> false
+        | Some variable ->
+            match variable.value with
+            | BicepSyntax.FunctionCall("getExistingResource", _) -> true
+            | _ -> false
 
 let findResource (name: string) (program: BicepProgram) =
     match tryFindResource name program with

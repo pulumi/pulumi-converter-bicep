@@ -44,4 +44,12 @@ for (const range of storageLocations.map((v, k) => ({key: k, value: v}))) {
         },
     }));
 }
+const exampleExistingStorage = azure_native.storage.getStorageAccountOutput({
+    accountName: "existingStorageName",
+    resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
+});
+const myExistingResourceGroup = azure_native.resources.getResourceGroupOutput({
+    resourceGroupName: "existingResourceGroupName",
+});
 export const storageEndpoint = storage.primaryEndpoints;
+export const existingEndpoint = exampleExistingStorage.apply(exampleExistingStorage => exampleExistingStorage.primaryEndpoints);

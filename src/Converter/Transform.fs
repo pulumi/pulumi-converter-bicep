@@ -5,7 +5,7 @@ open Converter.PulumiTypes
 
 let invoke (token: string) (args: (string * PulumiSyntax) list) =
     let args = PulumiSyntax.Object(Map.ofList [
-        for (key, value) in args -> PulumiSyntax.String key, value
+        for (key, value) in args -> PulumiSyntax.Identifier key, value
     ])
     
     let token = PulumiSyntax.String token
@@ -21,15 +21,29 @@ let transformFunction name args program =
             "resourceGroupName", fromBicep arg program
         ]
 
+    | "getExistingResource", [ BicepSyntax.String resourceToken; BicepSyntax.Object properties ] ->
+        let invokeToken = ResourceTokens.fromAzureSpecToExistingResourceToken resourceToken
+        invoke invokeToken [
+            for key, value in Map.toList properties do
+                match key with
+                | BicepSyntax.Identifier "name" ->
+                    if invokeToken = "azure-native:resources:getResourceGroup" then
+                        yield "resourceGroupName", fromBicep value program
+                    else
+                        match Map.tryFind invokeToken Schema.nameParameterForExistingResources with
+                        | Some specificNameParameter ->
+                            yield specificNameParameter, fromBicep value program
+                        | None -> ()
+                | BicepSyntax.Identifier other ->
+                    yield other, fromBicep value program
+                | _ -> ()
+        ]
+
     | "loadloadFileAsBase64", arg :: _ -> standardFunction "filebase64" [ "input", fromBicep arg program ]
     | "loadTextContent", arg :: _ -> standardFunction "file" [ "input", fromBicep arg program ]
 
     | funcName, args ->
         PulumiSyntax.FunctionCall(funcName, [ for arg in args -> fromBicep arg program ])
-
-type ProgramState = {
-    variableReplacements: Map<string, PulumiSyntax>
-}
 
 let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
     match expr with
@@ -50,7 +64,7 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
                 | otherwise ->
                     fromBicep key program, fromBicep value program
         ])
-
+  
     | BicepSyntax.TernaryExpression(condition, trueValue, falseValue) ->
         let condition = fromBicep condition program
         let trueValue = fromBicep trueValue program
@@ -65,6 +79,11 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
     | BicepSyntax.UnaryExpression (op, value) ->
         let value = fromBicep value program
         PulumiSyntax.UnaryExpression(op, value)
+
+    | BicepSyntax.FunctionCall(("uniqueId" | "uniqueString"), [ arg ]) ->
+        // reduce away `uniqueId` and `uniqueString` functions because it is used for naming resources
+        // pulumi already handles unique resource names without it
+        fromBicep arg program
 
     | BicepSyntax.FunctionCall (name, args) ->
         transformFunction name args program
@@ -520,3 +539,13 @@ let bicepProgram (bicepProgram: BicepProgram) : PulumiProgram =
     ]
     
     { nodes = nodes }
+    
+    
+let findPulumiVariable (name: string) (program: PulumiProgram) =
+    program.nodes
+    |> List.tryFind (function
+        | PulumiNode.LocalVariable variable -> name = variable.name
+        | _ -> false)
+    |> function
+        | Some (PulumiNode.LocalVariable variable) -> variable
+        | _ -> failwith $"Failed to find variable {name}"
