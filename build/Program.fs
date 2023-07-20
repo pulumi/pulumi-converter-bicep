@@ -110,6 +110,8 @@ let converterVersion() =
     doc.Load(content)
     doc.GetElementsByTagName("Version").[0].InnerText
     
+let artifacts = Path.Combine(repositoryRoot, "artifacts")
+
 let createArtifacts() =
     let version = converterVersion()
     let cwd = Path.Combine(repositoryRoot, "src", "PulumiBicepConverter")
@@ -118,11 +120,11 @@ let createArtifacts() =
         "linux-arm64"
         "osx-x64"
         "osx-arm64"
-        //"win-x64"
-        //"win-arm64"
+        "win-x64"
+        "win-arm64"
     ]
     
-    let artifacts = Path.Combine(repositoryRoot, "artifacts")
+    
     Shell.deleteDirs [
         Path.Combine(cwd, "bin")
         Path.Combine(cwd, "obj")
@@ -166,9 +168,38 @@ let inline await (task: Task<'t>) =
     |> Async.AwaitTask
     |> Async.RunSynchronously
     
-let publishArtifacts() =
+let releaseVersion (release: Release) = 
+    if not (String.IsNullOrWhiteSpace(release.Name)) then
+        release.Name.Substring(1, release.Name.Length - 1) 
+    elif not (String.IsNullOrWhiteSpace(release.TagName)) then 
+        release.TagName.Substring(1, release.TagName.Length - 1)
+    else 
+        ""
+ 
+let createAndPublishArtifacts() =
     let version = converterVersion()
-    ()
+    let github = new GitHubClient(ProductHeaderValue "PulumiBicepConverter")
+    let githubToken = Environment.GetEnvironmentVariable "GITHUB_TOKEN"
+    // only assign github token to the client when it is available (usually in Github CI)
+    if not (isNull githubToken) then  github.Credentials <- Credentials(githubToken)
+    let githubUsername = "Zaid-Ajaj"
+    let githubRepo = "pulumi-converter-bicep"
+    let releases = await (github.Repository.Release.GetAll(githubUsername, githubRepo))
+    let alreadyReleased = releases |> Seq.exists (fun release -> releaseVersion release = version)
+        
+    if alreadyReleased then
+        printfn "Release v{version} already exists"
+    else
+        createArtifacts()
+        let releaseInfo = NewRelease($"v{version}")
+        let release = await (github.Repository.Release.Create(githubUsername, githubRepo, releaseInfo))
+        for file in Directory.EnumerateFiles artifacts do
+            let asset = ReleaseAssetUpload()
+            asset.FileName <- Path.GetFileName file
+            asset.ContentType <- "application/tar"
+            asset.RawData <- File.OpenRead(file)
+            let uploadedAsset = await (github.Repository.Release.UploadAsset(release, asset))
+            printfn $"Uploaded {uploadedAsset.Name} into assets of v{version}"
 
 [<EntryPoint>]
 let main(args: string[]) : int =
@@ -180,13 +211,13 @@ let main(args: string[]) : int =
         integrationTests()
     | [| "build" |] ->
         buildSolution()
+        
     | [| "version" |] ->
         printfn $"{converterVersion()}"
 
     | [| "publish" |] ->
-        createArtifacts()
-        publishArtifacts()
-
+        createAndPublishArtifacts()
+        
     | [| "create-artifacts" |] ->
         createArtifacts()
 
