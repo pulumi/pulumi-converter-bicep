@@ -74,7 +74,7 @@ let main (args: string[]) =
                         bicepProgram
                         |> BicepProgram.simplifyScoping
                         |> BicepProgram.parameterizeByResourceGroup
-                        |> Transform.bicepProgram
+                        |> Transform.bicepProgramToPulumi
 
                     let pulumiProgramText = Printer.printProgram program
                     let pclFilePath = Path.Combine(example, "main.pp")

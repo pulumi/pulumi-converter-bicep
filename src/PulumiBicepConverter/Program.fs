@@ -4,10 +4,43 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.AspNetCore.Builder
 open Pulumirpc
+open Converter
+open System.IO
+
+let errorResponse (message: string) = 
+    let response = ConvertProgramResponse()
+    let errorDiagnostic = Codegen.Diagnostic()
+    errorDiagnostic.Summary <- message
+    errorDiagnostic.Severity <- Codegen.DiagnosticSeverity.DiagError
+    response.Diagnostics.Add(errorDiagnostic)
+    response
+
+let emptyResponse() = ConvertProgramResponse()
 
 let convertProgram (request: ConvertProgramRequest) = task {
-    let response = ConvertProgramResponse()
-    return response
+    let bicepFile =
+       Directory.EnumerateFiles(request.SourceDirectory)
+       |> Seq.tryFind (fun file -> Path.GetExtension(file) = ".bicep")
+
+    match bicepFile with
+    | None -> 
+        return errorResponse "No Bicep file found in the source directory"
+    | Some file ->
+        let content = File.ReadAllText(file)
+        match BicepParser.parse content with
+        | Error error ->
+            return errorResponse $"failed to parse bicep file at {file}: {error}"
+        | Ok bicepProgram ->
+            let pulumiProgram =
+                bicepProgram
+                |> BicepProgram.simplifyScoping
+                |> BicepProgram.parameterizeByResourceGroup
+                |> Transform.bicepProgramToPulumi
+                |> Printer.printProgram
+
+            let targetFile = Path.Combine(request.TargetDirectory, "main.pp")
+            File.WriteAllText(targetFile, pulumiProgram)
+            return emptyResponse()
 }
 
 let convertState (request: ConvertStateRequest) = task {

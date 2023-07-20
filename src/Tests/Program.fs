@@ -731,7 +731,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing 
             program
             |> BicepProgram.simplifyScoping
             |> BicepProgram.parameterizeByResourceGroup
-            |> Transform.bicepProgram
+            |> Transform.bicepProgramToPulumi
         
         
         let exampleStorage = Transform.findPulumiVariable "exampleStorage" pulumiProgram

@@ -2,6 +2,7 @@ open System
 open System.IO
 open System.Linq
 open System.Threading.Tasks
+open System.Xml
 open Fake.IO
 open Fake.Core
 open Publish
@@ -9,6 +10,8 @@ open CliWrap
 open CliWrap.Buffered
 open System.Text
 open Fastenshtein
+open System.Formats.Tar
+open Octokit
 
 /// Recursively tries to find the parent of a file starting from a directory
 let rec findParent (directory: string) (fileToFind: string) =
@@ -99,6 +102,74 @@ let buildSolution() =
     if Shell.Exec("dotnet", "build -c Release", Path.Combine(repositoryRoot, "src")) <> 0
     then failwithf "Build failed"
 
+let converterVersion() =
+    let projectFilePath = Path.Combine(repositoryRoot, "src", "PulumiBicepConverter", "PulumiBicepConverter.fsproj")
+    let content = File.ReadAllText projectFilePath
+    let doc = XmlDocument()
+    use content = new MemoryStream(Encoding.UTF8.GetBytes content)
+    doc.Load(content)
+    doc.GetElementsByTagName("Version").[0].InnerText
+    
+let createArtifacts() =
+    let version = converterVersion()
+    let cwd = Path.Combine(repositoryRoot, "src", "PulumiBicepConverter")
+    let runtimes = [
+        "linux-x64"
+        "linux-arm64"
+        "osx-x64"
+        "osx-arm64"
+        //"win-x64"
+        //"win-arm64"
+    ]
+    
+    let artifacts = Path.Combine(repositoryRoot, "artifacts")
+    Shell.deleteDirs [
+        Path.Combine(cwd, "bin")
+        Path.Combine(cwd, "obj")
+        artifacts
+    ]
+    
+    let binary = "pulumi-converter-bicep"
+    for runtime in runtimes do
+        printfn $"Building binary {binary} for {runtime}"
+        let args = [
+            "publish"
+            "--configuration Release"
+            $"--runtime {runtime}"
+            "--self-contained true"
+            "-p:PublishSingleFile=true"
+            "/p:DebugType=None"
+            "/p:DebugSymbols=false"
+        ]
+        let exitCode = Shell.Exec("dotnet", String.concat " " args, cwd)
+        if exitCode <> 0 then
+            failwith $"failed to build for runtime {runtime}"
+            
+    Directory.create artifacts
+    for runtime in runtimes do
+        let publishPath = Path.Combine(cwd, "bin", "Release", "net7.0", runtime, "publish")
+        let destinationRuntime =
+            match runtime with
+            | "osx-x64" -> "darwin-amd64"
+            | "osx-arm64" -> "darwin-arm64"
+            | "linux-x64" -> "linux-amd64"
+            | "linux-arm64" -> "linux-arm64"
+            | "win-x64" -> "windows-amd64"
+            | "win-arm64" -> "windows-arm64"
+            | _ -> runtime
+       
+        let destination = Path.Combine(artifacts, $"{binary}-v{version}-{destinationRuntime}.tar.gz")
+        TarFile.CreateFromDirectory(publishPath, destination, false)
+
+let inline await (task: Task<'t>) = 
+    task
+    |> Async.AwaitTask
+    |> Async.RunSynchronously
+    
+let publishArtifacts() =
+    let version = converterVersion()
+    ()
+
 [<EntryPoint>]
 let main(args: string[]) : int =
     match args with
@@ -109,6 +180,16 @@ let main(args: string[]) : int =
         integrationTests()
     | [| "build" |] ->
         buildSolution()
+    | [| "version" |] ->
+        printfn $"{converterVersion()}"
+
+    | [| "publish" |] ->
+        createArtifacts()
+        publishArtifacts()
+
+    | [| "create-artifacts" |] ->
+        createArtifacts()
+
     | [| "write-schema-subset"  |] ->
         match parseSchemaFromPulumi "azure-native" with
         | Error errorMessage -> printfn $"couldn't parse azure-native schema: {errorMessage}"

@@ -508,7 +508,7 @@ let bicepModule (moduleDecl: ModuleDeclaration) (program: BicepProgram) : Compon
     | _ ->
         None
 
-let bicepProgram (bicepProgram: BicepProgram) : PulumiProgram =
+let bicepProgramToPulumi (bicepProgram: BicepProgram) : PulumiProgram =
     let nodes = [
          for declaration in bicepProgram.declarations do
          match declaration with
