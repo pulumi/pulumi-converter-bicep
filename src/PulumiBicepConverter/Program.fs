@@ -1,5 +1,6 @@
 ﻿module Program
 
+open System.Threading
 open Converter.BicepParser
 open Foundatio.Storage
 open Microsoft.Extensions.DependencyInjection
@@ -8,6 +9,7 @@ open Microsoft.AspNetCore.Builder
 open Pulumirpc
 open Converter
 open System.IO
+open PulumiConverterPlugin
 
 let errorResponse (message: string) = 
     let response = ConvertProgramResponse()
@@ -51,25 +53,13 @@ type BicepConverterService() =
     override _.ConvertProgram(request, ctx) = convertProgram(request)
     override _.ConvertState(request, ctx) = convertState(request)
 
-let freePort() =
-    let listener = System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0)
-    listener.Start()
-    let port = (listener.LocalEndpoint :?> System.Net.IPEndPoint).Port
-    listener.Stop()
-    port
+let serve args =
+    let cancellationToken = CancellationToken()
+    PulumiConverterPlugin.Serve<BicepConverterService>(args, cancellationToken, System.Console.Out)
+    |> Async.AwaitTask
+    |> Async.RunSynchronously
 
-let port = freePort()
-
-// setup
-let appBuilder = WebApplication.CreateBuilder()
-appBuilder.Services.AddGrpc() |> ignore
-appBuilder.WebHost.UseSetting("urls", $"http://localhost:{port}") |> ignore
-appBuilder.Logging.ClearProviders() |> ignore
-
-// write out the port so that Pulumi knows which port to connect to
-printfn $"{port}\n"
-
-// Run the application
-let app = appBuilder.Build()
-app.MapGrpcService<BicepConverterService>() |> ignore
-app.Run()
+[<EntryPoint>]
+let main(args: string[]) =
+    serve args
+    0
