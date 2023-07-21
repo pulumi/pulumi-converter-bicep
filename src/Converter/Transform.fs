@@ -1,7 +1,9 @@
 module rec Converter.Transform
 
+open System.IO
 open Converter.BicepParser
 open Converter.PulumiTypes
+open Foundatio.Storage
 
 let invoke (token: string) (args: (string * PulumiSyntax) list) =
     let args = PulumiSyntax.Object(Map.ofList [
@@ -546,3 +548,14 @@ let findPulumiVariable (name: string) (program: PulumiProgram) =
     |> function
         | Some (PulumiNode.LocalVariable variable) -> variable
         | _ -> failwith $"Failed to find variable {name}"
+
+let modifyComponentPaths (map: string -> string) (program: PulumiProgram) =
+    let modifiedNodes =
+        program.nodes
+        |> List.map (function
+            | PulumiNode.Component componentDecl ->
+                PulumiNode.Component { componentDecl with path = map componentDecl.path }
+            | declaration -> declaration)
+
+    { nodes = modifiedNodes }
+    

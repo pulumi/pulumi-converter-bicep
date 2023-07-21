@@ -6,6 +6,7 @@ open Converter.PulumiTypes
 let rec print (expression: PulumiSyntax) (indentSize: int) (builder: StringBuilder) =
     let append (input: string) = builder.Append input |> ignore
     let indent() = append(String.replicate indentSize " ")
+    let indentBy(size: int) = append(String.replicate size " ")
     match expression with
     | PulumiSyntax.String value -> append(sprintf $"\"{value}\"")
     | PulumiSyntax.InterpolatedString (expressions, values) ->
@@ -39,7 +40,7 @@ let rec print (expression: PulumiSyntax) (indentSize: int) (builder: StringBuild
     | PulumiSyntax.Array values ->
         append "[\n"
         for (i, value) in List.indexed values do
-            indent()
+            indentBy (indentSize + 4)
             print value (indentSize + 4) builder
             if i <> values.Length - 1 then
                 append ",\n"
@@ -51,10 +52,10 @@ let rec print (expression: PulumiSyntax) (indentSize: int) (builder: StringBuild
     | PulumiSyntax.Object properties ->
         append "{\n"
         for (key, value) in Map.toList properties do
-            indent()
+            indentBy (indentSize + 4)
             print key indentSize builder
             append " = "
-            print value (indentSize + 12) builder
+            print value (indentSize + 4) builder
             append "\n"
         
         indent()

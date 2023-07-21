@@ -2,7 +2,7 @@ config resourceGroupName "string" {
     description = "The name of the resource group to operate on"
 }
 currentResourceGroup = invoke("azure-native:resources:getResourceGroup", {
-resourceGroupName = resourceGroupName
+    resourceGroupName = resourceGroupName
 })
 config storagePrefix "string" {
 }
@@ -13,8 +13,8 @@ config location "string" {
     default = currentResourceGroup.location
 }
 storageLocations = [
-"east",
-"west"
+    "east",
+    "west"
 ]
 
 resource storage "azure-native:storage:StorageAccount" {
@@ -22,7 +22,7 @@ resource storage "azure-native:storage:StorageAccount" {
     location = location
     resourceGroupName = currentResourceGroup.name
     sku = {
-    name = storageSKU
+        name = storageSKU
     }
 }
 resource storageAccounts "azure-native:storage:StorageAccount" {
@@ -33,7 +33,7 @@ resource storageAccounts "azure-native:storage:StorageAccount" {
     location = location
     resourceGroupName = currentResourceGroup.name
     sku = {
-    name = storageSKU
+        name = storageSKU
     }
 }
 resource storageAccountsByLocation "azure-native:storage:StorageAccount" {
@@ -44,15 +44,15 @@ resource storageAccountsByLocation "azure-native:storage:StorageAccount" {
     location = range.value
     resourceGroupName = currentResourceGroup.name
     sku = {
-    name = storageSKU
+        name = storageSKU
     }
 }
 exampleExistingStorage = invoke("azure-native:storage:getStorageAccount", {
-accountName = "existingStorageName"
-resourceGroupName = currentResourceGroup.name
+    accountName = "existingStorageName"
+    resourceGroupName = currentResourceGroup.name
 })
 myExistingResourceGroup = invoke("azure-native:resources:getResourceGroup", {
-resourceGroupName = "existingResourceGroupName"
+    resourceGroupName = "existingResourceGroupName"
 })
 output storageEndpoint {
     value = storage.primaryEndpoints

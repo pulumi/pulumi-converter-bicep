@@ -1,5 +1,7 @@
 ﻿module Program
 
+open Converter.BicepParser
+open Foundatio.Storage
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.AspNetCore.Builder
@@ -25,22 +27,18 @@ let convertProgram (request: ConvertProgramRequest) = task {
     match bicepFile with
     | None -> 
         return errorResponse "No Bicep file found in the source directory"
-    | Some file ->
-        let content = File.ReadAllText(file)
-        match BicepParser.parse content with
-        | Error error ->
-            return errorResponse $"failed to parse bicep file at {file}: {error}"
-        | Ok bicepProgram ->
-            let pulumiProgram =
-                bicepProgram
-                |> BicepProgram.simplifyScoping
-                |> BicepProgram.parameterizeByResourceGroup
-                |> Transform.bicepProgramToPulumi
-                |> Printer.printProgram
-
-            let targetFile = Path.Combine(request.TargetDirectory, "main.pp")
-            File.WriteAllText(targetFile, pulumiProgram)
-            return emptyResponse()
+    | Some entryBicepFile ->
+        let storageOptions = FolderFileStorageOptions(Folder=request.SourceDirectory)
+        let storage = new FolderFileStorage(storageOptions)
+        let! result = Compile.compileProgramWithComponents {
+            entryBicepSourceFile = entryBicepFile
+            targetDirectory = request.TargetDirectory
+            storage = storage
+        }
+        
+        match result with
+        | Error error -> return errorResponse error
+        | Ok() -> return emptyResponse()
 }
 
 let convertState (request: ConvertStateRequest) = task {

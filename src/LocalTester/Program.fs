@@ -5,6 +5,7 @@ open System.Threading.Tasks
 open CliWrap
 open CliWrap.Buffered
 open System.Linq
+open Foundatio.Storage
 
 let pulumiCliBinary() : Task<string> = task {
     try
@@ -30,10 +31,10 @@ let pulumiCliBinary() : Task<string> = task {
             return "pulumi"
 }
 
-let convertTypescript(directory: string) = task {
+let convertTypescript(directory: string, target: string) = task {
     let! pulumi = pulumiCliBinary()
     let! output =
-        Cli.Wrap(pulumi).WithArguments("convert --from pcl --language typescript --out typescript")
+        Cli.Wrap(pulumi).WithArguments($"convert --from pcl --language typescript --out {target}")
            .WithWorkingDirectory(directory)
            .WithValidation(CommandResultValidation.None)
            .ExecuteBufferedAsync()
@@ -56,7 +57,6 @@ let repositoryRoot = findParent __SOURCE_DIRECTORY__ "README.md"
 [<EntryPoint>]
 let main (args: string[]) =
     try
-        
         let integrationTests = Path.Combine(repositoryRoot, "integration_tests")
         let directories = Directory.EnumerateDirectories integrationTests
         for example in directories do
@@ -65,23 +65,25 @@ let main (args: string[]) =
             if not (File.Exists bicepFilePath) then
                 printfn $"Couldn't find bicep file at {bicepFilePath}"
             else
-                let content = File.ReadAllText bicepFilePath
-                match BicepParser.parse content with
-                | Error error ->
-                    printfn $"Failed to parse bicep file at {bicepFilePath}: {error}"
-                | Ok bicepProgram ->
-                    let program =
-                        bicepProgram
-                        |> BicepProgram.simplifyScoping
-                        |> BicepProgram.parameterizeByResourceGroup
-                        |> Transform.bicepProgramToPulumi
+                let compilationArgs : Compile.CompilationArgs = {
+                    entryBicepSourceFile = bicepFilePath
+                    targetDirectory = Path.Combine(example, "pulumi")
+                    storage = new FolderFileStorage(FolderFileStorageOptions(Folder=example))
+                }
 
-                    let pulumiProgramText = Printer.printProgram program
-                    let pclFilePath = Path.Combine(example, "main.pp")
-                    File.WriteAllText(pclFilePath, pulumiProgramText)
-                    printfn $"Converted bicep into Pulumi at {pclFilePath}"
+                let compilationResult =
+                    compilationArgs
+                    |> Compile.compileProgramWithComponents
+                    |> Async.AwaitTask
+                    |> Async.RunSynchronously
+                
+                match compilationResult with
+                | Error error ->
+                    printfn $"Failed to compile bicep file at {bicepFilePath}: {error}"
+                | Ok () ->
+                    printfn $"Converted bicep into Pulumi at {compilationArgs.targetDirectory}"
                     let conversion =
-                        convertTypescript example
+                        convertTypescript (compilationArgs.targetDirectory, Path.Combine(example,"typescript"))
                         |> Async.AwaitTask
                         |> Async.RunSynchronously
 

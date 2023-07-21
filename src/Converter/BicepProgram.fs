@@ -351,11 +351,124 @@ let parameterizeByResourceGroup (bicepProgram: BicepProgram) : BicepProgram =
         }
         
         programWithAddedDeclarations
+
+let parameterizeByResourceGroupName (bicepProgram: BicepProgram) : BicepProgram =
+    let resourceGroupNameParameter = BicepDeclaration.Parameter {
+        name = "resourceGroupName"
+        parameterType = Some "string"
+        defaultValue = None
+        decorators = [
+            BicepSyntax.FunctionCall("description", [
+                BicepSyntax.String "The name of the resource group to operate on"
+            ])
+        ]
+    }
+
+    let addResourceGroupName properties token =
+        let pulumiToken = ResourceTokens.fromAzureSpecToPulumiWithoutVersion token
+        if Array.contains pulumiToken Schema.resourcesWhichRequireResourceGroupName then
+            let resourceGroupName = BicepSyntax.Identifier "resourceGroupName"
+            if not (Map.containsKey resourceGroupName properties) then
+               let resourceGroupNameParam = BicepSyntax.VariableAccess "resourceGroupName"
+
+               properties
+               |> Map.add resourceGroupName resourceGroupNameParam
+               |> BicepSyntax.Object
+            else
+               BicepSyntax.Object properties      
+        else 
+            BicepSyntax.Object properties
+            
+    let modifiedDeclarations =
+        bicepProgram.declarations
+        |> List.map (function
+            | BicepDeclaration.Resource resource ->
+                match resource.value with
+                | BicepSyntax.Object properties ->
+                    let modifiedProperties = addResourceGroupName properties resource.token
+                    BicepDeclaration.Resource { resource with value = modifiedProperties }
+
+                | BicepSyntax.IfCondition (condition, BicepSyntax.Object properties) ->
+                    let modifiedProperties = addResourceGroupName properties resource.token
+                    let modifiedIfCondition = BicepSyntax.IfCondition(condition, modifiedProperties)
+                    BicepDeclaration.Resource { resource with value = modifiedIfCondition }
+
+                | BicepSyntax.For forSyntax ->
+                    match forSyntax.body with
+                    | BicepSyntax.Object properties ->
+                        let modifiedProperties = addResourceGroupName properties resource.token
+                        let modifiedFor = BicepSyntax.For { forSyntax with body = modifiedProperties }
+                        BicepDeclaration.Resource { resource with value =  modifiedFor }
+                        
+                    | _ -> BicepDeclaration.Resource resource
+                    
+                | _ -> BicepDeclaration.Resource resource
+                
+            | declaration -> declaration)
+
+    {
+      declarations = [
+        match tryFindVariable "resourceGroupName" bicepProgram with
+        | None -> yield resourceGroupNameParameter
+        | Some _ -> ()
         
-        
-    
-    
-    
-    
-    
-    
+        yield! modifiedDeclarations
+      ]
+    }
+
+let addResourceGroupNameParameterToModules (isMain: bool) (bicepProgram: BicepProgram)  : BicepProgram =
+    let addResourceGroupName' properties =
+       let resourceGroupName = BicepSyntax.Identifier "resourceGroupName"
+       if not (Map.containsKey resourceGroupName properties) then
+          let resourceGroupNameValue =
+              if isMain then
+                  BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("resourceGroup", [ ]), "name")
+              else
+                  BicepSyntax.VariableAccess "resourceGroupName"
+
+          properties
+          |> Map.add resourceGroupName resourceGroupNameValue
+          |> BicepSyntax.Object
+       else
+          BicepSyntax.Object properties      
+
+    let addResourceGroupName properties =
+        match Map.tryFind (BicepSyntax.Identifier "params") properties with
+        | Some (BicepSyntax.Object actualProperties) ->
+            let modified = addResourceGroupName' actualProperties
+            properties
+            |> Map.remove (BicepSyntax.Identifier "params")
+            |> Map.add (BicepSyntax.Identifier "params") modified
+            |> BicepSyntax.Object
+
+        | _ ->
+           BicepSyntax.Object properties
+  
+    let modifiedDeclarations =
+        bicepProgram.declarations
+        |> List.map (function
+            | BicepDeclaration.Module moduleDecl ->
+                match moduleDecl.value with
+                | BicepSyntax.Object properties ->
+                    let modifiedProperties = addResourceGroupName properties
+                    BicepDeclaration.Module { moduleDecl with value = modifiedProperties }
+
+                | BicepSyntax.IfCondition (condition, BicepSyntax.Object properties) ->
+                    let modifiedProperties = addResourceGroupName properties
+                    let modifiedIfCondition = BicepSyntax.IfCondition(condition, modifiedProperties)
+                    BicepDeclaration.Module { moduleDecl with value = modifiedIfCondition }
+
+                | BicepSyntax.For forSyntax ->
+                    match forSyntax.body with
+                    | BicepSyntax.Object properties ->
+                        let modifiedProperties = addResourceGroupName properties
+                        let modifiedFor = BicepSyntax.For { forSyntax with body = modifiedProperties }
+                        BicepDeclaration.Module { moduleDecl with value =  modifiedFor }
+                        
+                    | _ -> BicepDeclaration.Module moduleDecl
+                    
+                | _ -> BicepDeclaration.Module moduleDecl
+                
+            | declaration -> declaration)
+
+    { declarations = modifiedDeclarations }
