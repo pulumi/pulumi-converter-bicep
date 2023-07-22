@@ -47,8 +47,14 @@ type BicepDeclaration =
     | Output of OutputDeclaration
     | Module of ModuleDeclaration
 
+[<RequireQualifiedAccess>]
+type ProgramKind =
+    | EntryPoint
+    | Module
+
 type BicepProgram = {
     declarations : BicepDeclaration list
+    programKind: ProgramKind
 }
 
 type BicepForSyntax = {
@@ -248,42 +254,13 @@ let parse (text: string) : Result<BicepProgram, string> =
                             value = readSyntax resource.Value
                         })
                     else
-                        if typeString.StartsWith "Microsoft.Resources/resourceGroups" then
-                            // don't apply resource group scoping when accessing an existing resource group
-                            declarations.Add(BicepDeclaration.Variable {
-                                name = resource.Name.IdentifierName
-                                value = BicepSyntax.FunctionCall("getExistingResource", [
-                                    BicepSyntax.String typeString
-                                    readSyntax resource.Value
-                                ])
-                            })
-                        else
-                        match readSyntax resource.Value with
-                        | BicepSyntax.Object properties ->
-                            let modifiedProperties =
-                                match Map.tryFind (BicepSyntax.Identifier "scope") properties with
-                                | None ->
-                                    let newKey = BicepSyntax.Identifier "resourceGroupName"
-                                    let newValue = BicepSyntax.PropertyAccess(
-                                        BicepSyntax.FunctionCall("resourceGroup", [  ]), "name")
-                                        
-                                    properties
-                                    |> Map.add newKey newValue
-                                
-                                | Some scope ->
-                                    properties
-
-                            declarations.Add(BicepDeclaration.Variable {
-                                name = resource.Name.IdentifierName
-                                value = BicepSyntax.FunctionCall("getExistingResource", [
-                                    BicepSyntax.String typeString
-                                    BicepSyntax.Object modifiedProperties
-                                ])
-                            })
-                            
-                        | _ ->
-                            ()
-                           
+                        declarations.Add(BicepDeclaration.Variable {
+                            name = resource.Name.IdentifierName
+                            value = BicepSyntax.FunctionCall(Tokens.GetExistingResource, [
+                                BicepSyntax.String typeString
+                                readSyntax resource.Value
+                            ])
+                        })
               | _ ->
                   ()
 
@@ -306,7 +283,10 @@ let parse (text: string) : Result<BicepProgram, string> =
                   ()
           | _ ->
               ()
-      Ok { declarations = List.ofSeq declarations }
+      Ok {
+          declarations = List.ofSeq declarations
+          programKind = ProgramKind.EntryPoint
+      }
   with
   | ex -> Error ex.Message
   

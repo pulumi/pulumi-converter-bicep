@@ -11,3 +11,7 @@ resource storage "azure-native:storage:StorageAccount" {
         name = "Standard_LRS"
     }
 }
+exampleExistingStorage = invoke("azure-native:storage:getStorageAccount", {
+    accountName = "existingStorageName"
+    resourceGroupName = resourceGroupName
+})

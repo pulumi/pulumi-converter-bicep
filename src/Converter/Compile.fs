@@ -1,5 +1,6 @@
 module Converter.Compile
 
+open Converter.BicepParser
 open Foundatio.Storage
 open System.IO
 open BicepParser
@@ -16,23 +17,24 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
     let sourceDirectory = Path.GetDirectoryName args.entryBicepSourceFile
     let! bicepFileContent = storage.GetFileContentsAsync args.entryBicepSourceFile
     
-    let rec compileProgram bicepProgram sourceDir targetDir targetFile isEntry = task {
+    let rec compileProgram bicepProgram sourceDir targetDir targetFile = task {
         let rewriteComponentPath (path: string) =
             let fileName = Path.GetFileNameWithoutExtension path
             path.Replace($"{fileName}.bicep", fileName.Underscore())
 
         let pulumiProgram =
-            if isEntry then 
+            if bicepProgram.programKind = ProgramKind.EntryPoint then 
                 bicepProgram
-                |> BicepProgram.simplifyScoping
-                |> BicepProgram.addResourceGroupNameParameterToModules isEntry
+                |> BicepProgram.reduceScopeParameter
+                |> BicepProgram.addResourceGroupNameParameterToModules
                 |> BicepProgram.parameterizeByResourceGroup
                 |> Transform.bicepProgramToPulumi
                 |> Transform.modifyComponentPaths rewriteComponentPath 
                 |> Printer.printProgram
             else
                 bicepProgram
-                |> BicepProgram.addResourceGroupNameParameterToModules isEntry
+                |> BicepProgram.reduceScopeParameter
+                |> BicepProgram.addResourceGroupNameParameterToModules
                 |> BicepProgram.parameterizeByResourceGroupName
                 |> Transform.bicepProgramToPulumi
                 |> Transform.modifyComponentPaths rewriteComponentPath
@@ -54,17 +56,17 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
             let moduleName = (Path.GetFileNameWithoutExtension sourceModulePath).Underscore()
             let moduleProgram =
                 match BicepParser.parse sourceModuleContent with
-                | Error error -> { declarations = [] }
-                | Ok program -> program
+                | Error error -> { declarations = []; programKind = ProgramKind.Module }
+                | Ok program -> { program with programKind = ProgramKind.Module }
 
             let moduleTargetDir = Path.Combine(targetDir, moduleName)
-            do! compileProgram moduleProgram sourceDir moduleTargetDir $"{moduleName}.pp" false
+            do! compileProgram moduleProgram sourceDir moduleTargetDir $"{moduleName}.pp"
     }
 
     match BicepParser.parse bicepFileContent with
     | Error error ->
         return Error error
     | Ok mainBicepProgram ->
-        let! result = compileProgram mainBicepProgram sourceDirectory args.targetDirectory "main.pp" true
+        let! result = compileProgram mainBicepProgram sourceDirectory args.targetDirectory "main.pp"
         return Ok result
 }

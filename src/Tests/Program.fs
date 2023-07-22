@@ -133,13 +133,57 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing 
             BicepSyntax.String "Microsoft.Storage/storageAccounts@2021-02-01"
             BicepSyntax.Object (Map.ofList [
                 BicepSyntax.Identifier "name", BicepSyntax.String "existingStorageName"
-                BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
-                    BicepSyntax.FunctionCall("resourceGroup", []), "name")
             ])
         ])
 
         Expect.equal exampleStorage.value expectedValue "Value is transformed correctly"
     }
+    
+    test "existing resource can apply resource group scoping" {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing = {
+  name: 'existingStorageName'
+}
+"""
+        
+        let exampleStorage =
+            program
+            |> BicepProgram.reduceScopeParameter
+            |> BicepProgram.findVariable "exampleStorage" 
+        let expectedValue = BicepSyntax.FunctionCall("getExistingResource", [
+            BicepSyntax.String "Microsoft.Storage/storageAccounts@2021-02-01"
+            BicepSyntax.Object (Map.ofList [
+                BicepSyntax.Identifier "name", BicepSyntax.String "existingStorageName"
+                BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
+                    BicepSyntax.FunctionCall("resourceGroup", [  ]), "name")
+            ])
+        ])
+
+        Expect.equal exampleStorage.value expectedValue "Value is transformed correctly"
+    }
+    
+    test "existing resource can apply resource group scoping inside module" {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing = {
+  name: 'existingStorageName'
+}
+"""
+        
+        let exampleStorage =
+            { program with programKind = ProgramKind.Module }
+            |> BicepProgram.reduceScopeParameter
+            |> BicepProgram.findVariable "exampleStorage"
+
+        let expectedValue = BicepSyntax.FunctionCall("getExistingResource", [
+            BicepSyntax.String "Microsoft.Storage/storageAccounts@2021-02-01"
+            BicepSyntax.Object (Map.ofList [
+                BicepSyntax.Identifier "name", BicepSyntax.String "existingStorageName"
+                BicepSyntax.Identifier "resourceGroupName", BicepSyntax.VariableAccess "resourceGroupName"
+            ])
+        ])
+
+        Expect.equal exampleStorage.value expectedValue "Value is transformed correctly"
+    }  
     
     test "parsing conditional resource works" {
         let program = parseOrFail """
@@ -242,7 +286,7 @@ resource anotherStorageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = 
 """
         let parameterizedProgram =
             program
-            |> BicepProgram.simplifyScoping
+            |> BicepProgram.reduceScopeParameter
             |> BicepProgram.parameterizeByResourceGroup
 
         Expect.equal parameterizedProgram.declarations.Length 5 "There are 5 declarations"
@@ -416,7 +460,7 @@ let configTypeInference = testList "Config type inference" [
 let resourceTransforms = testList "resource transformations" [
     test "extracting empty resource options" {
         let properties = Map.empty
-        let emptyProgram = { declarations = [ ] }
+        let emptyProgram = { declarations = [ ]; programKind = ProgramKind.EntryPoint }
         let options = Transform.extractResourceOptions properties emptyProgram
         Expect.isNone options "resource options are None"
     }
@@ -426,7 +470,7 @@ let resourceTransforms = testList "resource transformations" [
             BicepSyntax.Identifier "parent", BicepSyntax.VariableAccess "rg"
         ]
         
-        let emptyProgram = { declarations = [ ] }
+        let emptyProgram = { declarations = [ ]; programKind = ProgramKind.EntryPoint }
         let options = Transform.extractResourceOptions properties emptyProgram
         Expect.isSome options "resource options are not empty"
         let options = Option.get options
@@ -442,7 +486,7 @@ let resourceTransforms = testList "resource transformations" [
             ]
         ]
 
-        let emptyProgram = { declarations = [ ] }
+        let emptyProgram = { declarations = [ ]; programKind = ProgramKind.EntryPoint }
         let options = Transform.extractResourceOptions properties emptyProgram
         Expect.isSome options "resource options are not empty"
         let options = Option.get options
@@ -493,7 +537,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 """
         
-        let simplifiedProgram = program |> BicepProgram.simplifyScoping 
+        let simplifiedProgram = program |> BicepProgram.reduceScopeParameter 
         let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
         let expectedResourceBody = BicepSyntax.Object(Map.ofList [
             BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
@@ -515,12 +559,31 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 """
         
-        let simplifiedProgram = program |> BicepProgram.simplifyScoping 
+        let simplifiedProgram = program |> BicepProgram.reduceScopeParameter 
         let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
         let expectedResourceBody = BicepSyntax.Object(Map.ofList [
             BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
             BicepSyntax.Identifier "resourceGroupName", BicepSyntax.PropertyAccess(
                 BicepSyntax.VariableAccess "currentResourceGroup", "name")
+        ])
+        
+        Expect.equal exampleStorage.value expectedResourceBody "The resource body is simplified correctly"
+    }
+    
+    test "resource group scoping is modified to plain resourceGroupName when referencing a resource group call"  {
+        let program = parseOrFail """
+param rg string
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  location: 'eastus'
+  scope: resourceGroup(rg)
+}
+"""
+        
+        let simplifiedProgram = program |> BicepProgram.reduceScopeParameter 
+        let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
+        let expectedResourceBody = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
+            BicepSyntax.Identifier "resourceGroupName", BicepSyntax.VariableAccess "rg"
         ])
         
         Expect.equal exampleStorage.value expectedResourceBody "The resource body is simplified correctly"
@@ -534,7 +597,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
 }
 """
 
-        let simplifiedProgram = program |> BicepProgram.simplifyScoping 
+        let simplifiedProgram = program |> BicepProgram.reduceScopeParameter 
         let exampleStorage = BicepProgram.findResource "exampleStorage" simplifiedProgram
         let expectedResourceBody = BicepSyntax.Object(Map.ofList [
             BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
@@ -729,7 +792,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' existing 
 """
         let pulumiProgram =
             program
-            |> BicepProgram.simplifyScoping
+            |> BicepProgram.reduceScopeParameter
             |> BicepProgram.parameterizeByResourceGroup
             |> Transform.bicepProgramToPulumi
         
@@ -815,7 +878,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for (l
 ]
 
 let printExpr (expr: BicepSyntax) =
-    let emptyProgram = { declarations = [] }
+    let emptyProgram = { declarations = [ ]; programKind = ProgramKind.EntryPoint }
     let builder = StringBuilder()
     Printer.print (Transform.fromBicep expr emptyProgram) 0 builder
     builder.ToString()

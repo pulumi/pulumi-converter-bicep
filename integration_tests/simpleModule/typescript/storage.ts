@@ -23,6 +23,11 @@ export class Storage extends pulumi.ComponentResource {
             parent: this,
         });
 
+        const exampleExistingStorage = azure_native.storage.getStorageAccountOutput({
+            accountName: "existingStorageName",
+            resourceGroupName: args.resourceGroupName,
+        });
+
         this.registerOutputs();
     }
 }

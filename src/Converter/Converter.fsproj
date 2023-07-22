@@ -6,6 +6,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Tokens.fs" />
         <Compile Include="BicepParser.fs" />
         <Compile Include="ResourceTokens.fs" />
         <Compile Include="Schema.fs" />

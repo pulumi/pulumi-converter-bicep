@@ -5,12 +5,10 @@ open System.Threading.Tasks
 open System.Xml
 open Fake.IO
 open Fake.Core
-open Publish
 open CliWrap
 open CliWrap.Buffered
 open System.Text
 open Fastenshtein
-open System.Formats.Tar
 open Octokit
 open ICSharpCode.SharpZipLib.Tar
 open ICSharpCode.SharpZipLib.GZip
@@ -186,9 +184,7 @@ let releaseVersion (release: Release) =
         release.TagName.Substring(1, release.TagName.Length - 1)
     else 
         ""
- 
 
-    
 let createAndPublishArtifacts() =
     let version = converterVersion()
     let github = new GitHubClient(ProductHeaderValue "PulumiBicepConverter")
