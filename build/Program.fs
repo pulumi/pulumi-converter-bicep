@@ -203,8 +203,9 @@ let createAndPublishArtifacts() =
     let alreadyReleased = releases |> Seq.exists (fun release -> releaseVersion release = version)
         
     if alreadyReleased then
-        printfn "Release v{version} already exists"
+        printfn $"Release v{version} already exists, skipping publish"
     else
+        printfn $"Preparing artifacts to release v{version}"
         createArtifacts()
         let releaseInfo = NewRelease($"v{version}")
         let release = await (github.Repository.Release.Create(githubUsername, githubRepo, releaseInfo))

@@ -1,4 +1,4 @@
-name: .NET
+name: Publish
 
 on:
   push:
@@ -10,7 +10,7 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -18,5 +18,11 @@ jobs:
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 7.0.x
+    - name: Build Solution
+      run: dotnet run build
+    - name: Run Unit Tests
+      run: dotnet run tests
+    - name: Run Integration Tests
+      run: dotnet run integration-tests
     - name: Publish
       run: dotnet run publish
