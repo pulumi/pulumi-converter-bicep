@@ -204,11 +204,54 @@ let rec readSyntax (input: SyntaxBase) : BicepSyntax =
     | otherwise ->
         BicepSyntax.Empty
 
+let withoutVersion (typeToken: string) =
+    match typeToken.Split "@" with
+    | [| token; version |] -> token
+    | _ -> typeToken
+    
+let addParentSymbol (parentSymbol: string) (resourceValue: BicepSyntax) =
+    match resourceValue with
+    | BicepSyntax.Object properties ->
+        if not (Map.containsKey (BicepSyntax.Identifier "parent") properties) then
+            properties
+            |> Map.add (BicepSyntax.Identifier "parent") (BicepSyntax.VariableAccess parentSymbol)
+            |> BicepSyntax.Object
+            
+        else
+            BicepSyntax.Object properties
+    | _ ->
+        resourceValue
+
 let parse (text: string) : Result<BicepProgram, string> =
   try 
       let parser = Parser(text)
       let program = parser.Program()
       let declarations = ResizeArray<BicepDeclaration>()
+
+      let rec parseChildResources (value: SyntaxBase) (parentResourceToken: string) (parentResourceSymbol: string) =
+          match value with
+          | :? ObjectSyntax as objectValue ->
+              for resource in objectValue.Resources do
+                  match readSyntax (resource.TypeString :> SyntaxBase) with
+                  | BicepSyntax.String typeToken ->
+                      let fullResourceToken =
+                          let token = withoutVersion typeToken
+                          if  not (token.Contains ".")
+                          then parentResourceToken.Replace("@", $"/{token}@")
+                          else typeToken
+
+                      declarations.Add(BicepDeclaration.Resource {
+                          name = resource.Name.IdentifierName
+                          token = fullResourceToken
+                          value = readSyntax resource.Value |> addParentSymbol parentResourceSymbol
+                      })
+
+                      parseChildResources resource.Value fullResourceToken resource.Name.IdentifierName
+                  | _ ->
+                      ()
+          | _ ->
+              ()
+      
       for decl in program.Declarations do
           match decl with
           | :? ParameterDeclarationSyntax as parameter ->
@@ -244,7 +287,6 @@ let parse (text: string) : Result<BicepProgram, string> =
               })
 
           | :? ResourceDeclarationSyntax as resource ->
-
               match readSyntax (resource.TypeString :> SyntaxBase) with
               | BicepSyntax.String typeString ->
                     if not (resource.IsExistingResource()) then
@@ -253,6 +295,8 @@ let parse (text: string) : Result<BicepProgram, string> =
                             token = typeString
                             value = readSyntax resource.Value
                         })
+                        
+                        parseChildResources resource.Value typeString resource.Name.IdentifierName
                     else
                         declarations.Add(BicepDeclaration.Variable {
                             name = resource.Name.IdentifierName

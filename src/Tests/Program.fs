@@ -272,6 +272,46 @@ resource networkSecurityGroups 'Microsoft.Network/networkSecurityGroups@2020-06-
         Expect.equal expectedForLoop networkSecurityGroups.value "The resource body is parsed correctly"
     }
     
+    test "parsing nested resources works" {
+        let program = parseOrFail """
+resource storage 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+  name: 'example-storage'
+  location: 'west'
+  
+  resource service 'fileServices' = {
+    name: 'default'
+
+    resource share 'shares' = {
+      name: 'exampleshare'
+    }
+  }
+}
+"""
+        Expect.equal program.declarations.Length 3 "There are top-level declarations"
+        let storage = BicepProgram.findResource "storage" program
+        let expectedStorageValue = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "name", BicepSyntax.String "example-storage"
+            BicepSyntax.Identifier "location", BicepSyntax.String "west"
+        ])
+        Expect.equal storage.value expectedStorageValue "storage value is correct"
+        
+        let service = BicepProgram.findResource "service" program
+        Expect.equal service.token "Microsoft.Storage/storageAccounts/fileServices@2022-09-01" "token is merged correctly"
+        let expectedServiceValue = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "name", BicepSyntax.String "default"
+            BicepSyntax.Identifier "parent", BicepSyntax.VariableAccess "storage"
+        ])
+        Expect.equal service.value expectedServiceValue "service value is correct"
+
+        let share = BicepProgram.findResource "share" program
+        Expect.equal share.token "Microsoft.Storage/storageAccounts/fileServices/shares@2022-09-01" "token is merged correctly"
+        let expectedShareValue = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "name", BicepSyntax.String "exampleshare"
+            BicepSyntax.Identifier "parent", BicepSyntax.VariableAccess "service"
+        ])
+        Expect.equal share.value expectedShareValue "share value is correct"
+    }
+
     test "parameterizing bicep program by resource group works" {
         let program = parseOrFail """
 param location string = resourceGroup().location
