@@ -897,6 +897,48 @@ let printTests = testList "Printing" [
         let exprMixed = printExpr (parseExpression "'hello-${1}-from-${2}-until-${3}'")
         Expect.equal exprMixed "\"hello-${1}-from-${2}-until-${3}\"" "interpolated string printed"
     }
+    
+    test "printing comparison operators work" {
+        let printed = printExpr(parseExpression "this > that")
+        Expect.equal printed "this > that" "printed correctly"
+        
+        let printed = printExpr(parseExpression "this >= that")
+        Expect.equal printed "this >= that" "printed correctly"
+        
+        let printed = printExpr(parseExpression "this < that")
+        Expect.equal printed "this < that" "printed correctly"
+        
+        let printed = printExpr(parseExpression "this <= that")
+        Expect.equal printed "this <= that" "printed correctly"
+        
+        let printed = printExpr(parseExpression "this == that")
+        Expect.equal printed "this == that" "printed correctly"
+        
+        let printed = printExpr(parseExpression "this != that")
+        Expect.equal printed "this != that" "printed correctly"
+    }
+
+    test "printing for expressions works and compiling to entries function" {
+        let printed =
+            "[ for number in numbers : number + 1 ]"
+            |> parseExpression
+            |> printExpr
+       
+        let expected = "[for entry in entries(numbers) : entry.value + 1]"
+        
+        Expect.equal printed expected "printed correctly"
+    }
+
+    test "printing for expressions works with key and value" {
+        let printed =
+            "[ for (number, i) in numbers : number + i ]"
+            |> parseExpression
+            |> printExpr
+       
+        let expected = "[for entry in entries(numbers) : entry.value + entry.key]"
+        
+        Expect.equal printed expected "printed correctly"
+    }
 ]
 
 let allTests = testList "All tests" [

@@ -44,6 +44,35 @@ let transformFunction name args program =
     | funcName, args ->
         PulumiSyntax.FunctionCall(funcName, [ for arg in args -> fromBicep arg program ])
 
+let transformForExpression (expr: BicepForSyntax) (program: BicepProgram) : PulumiForSyntax =
+    let valueVariableReplacement =
+        match expr.variableSection with
+        | BicepSyntax.LocalVariable variableName ->
+            Some (variableName, BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "entry", "value"))
+        | BicepSyntax.LocalVariableBlock (variableName::_) ->
+            Some (variableName, BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "entry", "value"))
+        | _ -> None
+
+    let keyVariableReplacement =
+        match expr.variableSection with
+        | BicepSyntax.LocalVariableBlock [ _; variableName] ->
+            Some (variableName, BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "entry", "key"))
+        | _ -> None
+
+    let replacements = List.choose id [
+        valueVariableReplacement
+        keyVariableReplacement
+    ]
+
+    let modifiedBody = BicepProgram.replaceVariables (Map.ofList replacements) expr.body
+    let pulumiForExpression = {
+        variable = "entry"
+        expression = PulumiSyntax.FunctionCall("entries", [ fromBicep expr.expression program ])
+        body = fromBicep modifiedBody program
+    }
+    
+    pulumiForExpression
+    
 let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
     match expr with
     | BicepSyntax.String value -> PulumiSyntax.String value
@@ -129,16 +158,9 @@ let rec fromBicep (expr: BicepSyntax) (program: BicepProgram) =
         PulumiSyntax.Identifier identifier
 
     | BicepSyntax.For forSyntax ->
-        PulumiSyntax.For {
-            expression = fromBicep forSyntax.expression program
-            body = fromBicep forSyntax.body program
-            variables =
-                match forSyntax.variableSection with
-                | BicepSyntax.LocalVariable name -> [ name ]
-                | BicepSyntax.LocalVariableBlock names -> names
-                | anythingElse -> []
-        }
-        
+        let transformed = transformForExpression forSyntax program
+        PulumiSyntax.For transformed
+
     | BicepSyntax.IndexExpression (target, index) ->
         let target = fromBicep target program
         let index = fromBicep index program

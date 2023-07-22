@@ -77,7 +77,24 @@ let rec print (expression: PulumiSyntax) (indentSize: int) (builder: StringBuild
         print trueResult indentSize builder
         append " : "
         print falseResult indentSize builder
-    | _ ->
+        
+    | PulumiSyntax.UnaryExpression (operator, operand) ->
+        append operator
+        print operand indentSize builder
+
+    | PulumiSyntax.BinaryExpression (operator, left, right) ->
+        print left indentSize builder
+        append $" {operator} "
+        print right indentSize builder
+        
+    | PulumiSyntax.For forSyntax ->
+        append $"[for {forSyntax.variable} in "
+        print forSyntax.expression indentSize builder
+        append " : "
+        print forSyntax.body indentSize builder
+        append "]"
+
+    | PulumiSyntax.Empty ->
         ()
 
 let printProgram(program: PulumiProgram) =

@@ -1,7 +1,7 @@
 module rec Converter.PulumiTypes
 
 type PulumiForSyntax = {
-    variables : string list
+    variable : string
     expression : PulumiSyntax
     body : PulumiSyntax
 }
