@@ -32,7 +32,7 @@ let convertProgram (request: ConvertProgramRequest) = task {
     | Some entryBicepFile ->
         let storageOptions = FolderFileStorageOptions(Folder=request.SourceDirectory)
         let storage = new FolderFileStorage(storageOptions)
-        let! result = Compile.compileProgramWithComponents {
+        let result = Compile.compileProgramWithComponents {
             entryBicepSourceFile = entryBicepFile
             targetDirectory = request.TargetDirectory
             storage = storage

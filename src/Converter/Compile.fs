@@ -12,12 +12,16 @@ type CompilationArgs = {
     storage: IFileStorage
 }
 
-let compileProgramWithComponents (args: CompilationArgs) = task {
+let compileProgramWithComponents (args: CompilationArgs) =
     let storage = args.storage
     let sourceDirectory = Path.GetDirectoryName args.entryBicepSourceFile
-    let! bicepFileContent = storage.GetFileContentsAsync args.entryBicepSourceFile
+    let bicepFileContent =
+        args.entryBicepSourceFile
+        |> storage.GetFileContentsAsync 
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
     
-    let rec compileProgram bicepProgram sourceDir targetDir targetFile = task {
+    let rec compileProgram bicepProgram sourceDir targetDir targetFile = 
         let rewriteComponentPath (path: string) =
             let fileName = Path.GetFileNameWithoutExtension path
             path.Replace($"{fileName}.bicep", fileName.Underscore())
@@ -43,7 +47,10 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
                 |> Printer.printProgram
 
         let targetFile = Path.Combine(targetDir, targetFile)
-        let! saved = storage.SaveFileAsync(targetFile, pulumiProgram)
+        let saved =
+            storage.SaveFileAsync(targetFile, pulumiProgram)
+            |> Async.AwaitTask
+            |> Async.RunSynchronously
     
         let moduleDeclarations =
             bicepProgram.declarations
@@ -54,7 +61,10 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
 
         for moduleDecl in moduleDeclarations do
             let sourceModulePath = Path.Combine(sourceDir, moduleDecl.path)
-            let! sourceModuleContent = storage.GetFileContentsAsync(sourceModulePath)
+            let sourceModuleContent =
+                storage.GetFileContentsAsync(sourceModulePath)
+                |> Async.AwaitTask
+                |> Async.RunSynchronously
             let moduleName = (Path.GetFileNameWithoutExtension sourceModulePath).Underscore()
             let moduleProgram =
                 match BicepParser.parse sourceModuleContent with
@@ -62,13 +72,11 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
                 | Ok program -> { program with programKind = ProgramKind.Module }
 
             let moduleTargetDir = Path.Combine(targetDir, moduleName)
-            do! compileProgram moduleProgram sourceDir moduleTargetDir $"{moduleName}.pp"
-    }
+            compileProgram moduleProgram sourceDir moduleTargetDir $"{moduleName}.pp"
 
     match BicepParser.parse bicepFileContent with
     | Error error ->
-        return Error error
+        Error error
     | Ok mainBicepProgram ->
-        let! result = compileProgram mainBicepProgram sourceDirectory args.targetDirectory "main.pp"
-        return Ok result
-}
+        let result = compileProgram mainBicepProgram sourceDirectory args.targetDirectory "main.pp"
+        Ok result

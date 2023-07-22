@@ -65,25 +65,20 @@ let main (args: string[]) =
             if not (File.Exists bicepFilePath) then
                 printfn $"Couldn't find bicep file at {bicepFilePath}"
             else
-                let compilationArgs : Compile.CompilationArgs = {
+                let pulumiTargetDirectory = Path.Combine(example, "pulumi")
+                let compilationResult = Compile.compileProgramWithComponents {
                     entryBicepSourceFile = bicepFilePath
-                    targetDirectory = Path.Combine(example, "pulumi")
+                    targetDirectory = pulumiTargetDirectory
                     storage = new FolderFileStorage(FolderFileStorageOptions(Folder=example))
                 }
 
-                let compilationResult =
-                    compilationArgs
-                    |> Compile.compileProgramWithComponents
-                    |> Async.AwaitTask
-                    |> Async.RunSynchronously
-                
                 match compilationResult with
                 | Error error ->
                     printfn $"Failed to compile bicep file at {bicepFilePath}: {error}"
                 | Ok () ->
-                    printfn $"Converted bicep into Pulumi at {compilationArgs.targetDirectory}"
+                    printfn $"Converted bicep into Pulumi at {pulumiTargetDirectory}"
                     let conversion =
-                        convertTypescript (compilationArgs.targetDirectory, Path.Combine(example,"typescript"))
+                        convertTypescript (pulumiTargetDirectory, Path.Combine(example,"typescript"))
                         |> Async.AwaitTask
                         |> Async.RunSynchronously
 
