@@ -12,6 +12,7 @@ open Fastenshtein
 open Octokit
 open ICSharpCode.SharpZipLib.Tar
 open ICSharpCode.SharpZipLib.GZip
+open PulumiSchema.Types
 
 /// Recursively tries to find the parent of a file starting from a directory
 let rec findParent (directory: string) (fileToFind: string) =
@@ -278,6 +279,19 @@ let main(args: string[]) : int =
                     | _ -> [])
                 |> List.append [ "azure-native:resources:getResourceGroup", "resourceGroupName" ]
                
+            let resourcesWhichHaveInputPropertiesObject =
+                azureNativeSchema.resources
+                |> Map.toList
+                |> List.filter (fun (token, resource) ->
+                    match Map.tryFind "properties" resource.inputProperties with
+                    | Some property ->
+                        match property.schemaType with
+                        | SchemaType.Object _ -> true
+                        | SchemaType.Ref _ -> true
+                        | _ -> false
+                    | _ -> false)
+               |> List.map fst
+            
             printfn $"There are {resourcesWhichRequireResourceGroupName.Length} resources which require resourceGroupName"
             let targetFile = Path.Combine(repositoryRoot, "src", "Converter", "Schema.fs")
             let content = StringBuilder()
@@ -288,6 +302,13 @@ let main(args: string[]) : int =
                 append $"   \"{resourceToken}\"\n"
             append "|]"
             append "\n\n"
+
+            append "let resourcesWhichHaveInputPropertiesObject = [|\n"
+            for resourceToken in resourcesWhichHaveInputPropertiesObject do
+                append $"   \"{resourceToken}\"\n"
+            append "|]"
+            append "\n\n"
+            
             append "let nameParameterForExistingResources = Map.ofArray [|\n"
             for invokeToken, parameterName in mainParameterToQueryExistingResources do
                 append $"   \"{invokeToken}\", \"{parameterName}\"\n"

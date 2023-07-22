@@ -279,22 +279,29 @@ let extractResourceInputs (properties: Map<BicepSyntax, BicepSyntax>) (program: 
                 ()
     ]
     
-let spreadProperties (inputs: Map<string, PulumiSyntax>): Map<string, PulumiSyntax> =
-    Map.ofList [
-        for key, value in Map.toList inputs do
-            match key, value with
-            | "properties", PulumiSyntax.Object properties ->
-                for propertyName, propertyValue in Map.toList properties do
-                    match propertyName with
-                    | PulumiSyntax.Identifier name -> 
-                        yield name, propertyValue
-                    | PulumiSyntax.String name ->
-                        yield name, propertyValue
-                    | _ ->
-                        ()
-            | _ ->
-                yield key, value
-    ]
+let spreadProperties token (inputs: Map<string, PulumiSyntax>): Map<string, PulumiSyntax> =
+    if not (Array.contains token Schema.resourcesWhichHaveInputPropertiesObject) then
+        // for resources which don't have a property called "properties"
+        // spread the properties into the first level of attributes for that resource
+        Map.ofList [
+            for key, value in Map.toList inputs do
+                match key, value with
+                | "properties", PulumiSyntax.Object properties ->
+                    for propertyName, propertyValue in Map.toList properties do
+                        match propertyName with
+                        | PulumiSyntax.Identifier name -> 
+                            yield name, propertyValue
+                        | PulumiSyntax.String name ->
+                            yield name, propertyValue
+                        | _ ->
+                            ()
+                | _ ->
+                    yield key, value
+        ]
+    else
+        // if a resource does have a "properties" property
+        // leave it as is
+        inputs
 
 let extractComponentInputs (properties: Map<string, PulumiSyntax>) =
     match Map.tryFind "params" properties with
@@ -318,7 +325,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             logicalName = extractLogicalName properties
             inputs =
                 extractResourceInputs properties program
-                |> spreadProperties
+                |> spreadProperties resourceType
             options = extractResourceOptions properties program
         }
 
@@ -343,7 +350,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             logicalName = extractLogicalName properties
             inputs =
                 extractResourceInputs properties program
-                |> spreadProperties
+                |> spreadProperties resourceType
             options = Some resourceOptions
         }
         
@@ -393,7 +400,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
                 logicalName = extractLogicalName properties
                 inputs =
                     extractResourceInputs properties program
-                    |> spreadProperties
+                    |> spreadProperties resourceType
                 options = Some resourceOptions
             }
 

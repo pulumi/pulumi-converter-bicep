@@ -392,6 +392,56 @@ let parameterizeByResourceGroup (bicepProgram: BicepProgram) : BicepProgram =
         
         programWithAddedDeclarations
 
+let parameterizeByTenantId (bicepProgram: BicepProgram) : BicepProgram =
+    let containsImplicitSubscriptionTenantId =
+        bicepProgram
+        |> programContains (function
+            | BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("subscription", [  ]), "tenantId") -> true
+            | _ -> false)
+    
+    let containsImplicitTenantId =
+        bicepProgram
+        |> programContains (function
+            | BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("tenant", [  ]), "tenantId") -> true
+            | _ -> false)
+
+    let tenantIdParameter = BicepDeclaration.Parameter {
+        name = "tenantId"
+        parameterType = Some "string"
+        decorators = [  ]
+        defaultValue =
+            match bicepProgram.programKind with
+            | ProgramKind.EntryPoint -> None
+            | ProgramKind.Module -> Some (BicepSyntax.String "")
+    }
+    
+    if not containsImplicitSubscriptionTenantId && not containsImplicitTenantId then
+        bicepProgram
+    else
+        let replacements = Map.ofList [
+            BicepSyntax.PropertyAccess(
+                BicepSyntax.FunctionCall("subscription", [  ]), "tenantId"), BicepSyntax.VariableAccess "tenantId"
+            
+            BicepSyntax.PropertyAccess(
+                BicepSyntax.FunctionCall("tenant", [  ]), "tenantId"), BicepSyntax.VariableAccess "tenantId"
+        ]
+
+        let modifiedProgram = programReplace replacements bicepProgram
+        let programWithAddedDeclarations = {
+            bicepProgram with
+                declarations = [
+                    match tryFindParameter "tenantId" modifiedProgram  with
+                    | None ->
+                        // add the parameter
+                        yield tenantIdParameter
+                    | _ ->
+                        ()
+                    yield! modifiedProgram.declarations
+                ]
+        }
+
+        programWithAddedDeclarations
+        
 let parameterizeByResourceGroupName (bicepProgram: BicepProgram) : BicepProgram =
     let resourceGroupNameParameter = BicepDeclaration.Parameter {
         name = Tokens.ResourceGroupName

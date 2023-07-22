@@ -26,6 +26,7 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
             if bicepProgram.programKind = ProgramKind.EntryPoint then 
                 bicepProgram
                 |> BicepProgram.reduceScopeParameter
+                |> BicepProgram.parameterizeByTenantId
                 |> BicepProgram.addResourceGroupNameParameterToModules
                 |> BicepProgram.parameterizeByResourceGroup
                 |> Transform.bicepProgramToPulumi
@@ -34,6 +35,7 @@ let compileProgramWithComponents (args: CompilationArgs) = task {
             else
                 bicepProgram
                 |> BicepProgram.reduceScopeParameter
+                |> BicepProgram.parameterizeByTenantId
                 |> BicepProgram.addResourceGroupNameParameterToModules
                 |> BicepProgram.parameterizeByResourceGroupName
                 |> Transform.bicepProgramToPulumi
