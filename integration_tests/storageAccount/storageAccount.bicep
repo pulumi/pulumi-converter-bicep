@@ -22,8 +22,8 @@ resource storageAccounts 'Microsoft.Storage/storageAccounts@2022-09-01' = [for i
   }
 }]
 
-resource storageAccountsByLocation 'Microsoft.Storage/storageAccounts@2022-09-01' = [for location in storageLocations:{
-   location: location
+resource storageAccountsByLocation 'Microsoft.Storage/storageAccounts@2022-09-01' = [for storageLocation in storageLocations:{
+   location: storageLocation
    kind: 'StorageV2'
    sku: {
      name: storageSKU
