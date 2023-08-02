@@ -556,6 +556,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
             Expect.equal pulumiResource.name "exampleStorage" "The name is correct"
             Expect.equal pulumiResource.token "azure-native:storage:StorageAccount" "token is correct"
             let expectedResourceInputs = Map.ofList [
+                "accountName", PulumiSyntax.String "storage"
                 "location", PulumiSyntax.String "eastus"
                 "kind", PulumiSyntax.String "StorageV2"
                 "sku", PulumiSyntax.Object (Map.ofList [
@@ -663,6 +664,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
         match Transform.bicepResource exampleStorage program with
         | Some pulumiResource ->
             let expectedResourceInputs = Map.ofList [
+                "accountName", PulumiSyntax.String "storage"
                 "odataType", PulumiSyntax.String "eastus"
                 "sku", PulumiSyntax.Object (Map.ofList [
                     PulumiSyntax.Identifier "odataType", PulumiSyntax.String "Standard_LRS"
@@ -692,6 +694,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = if (cre
             Expect.equal pulumiResource.name "exampleStorage" "The name is correct"
             Expect.equal pulumiResource.token "azure-native:storage:StorageAccount" "token is correct"
             let expectedResourceInputs = Map.ofList [
+                "accountName", PulumiSyntax.String "storage"
                 "location", PulumiSyntax.String "eastus"
                 "kind", PulumiSyntax.String "StorageV2"
                 "sku", PulumiSyntax.Object (Map.ofList [
@@ -803,6 +806,7 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = [for in
                     PulumiSyntax.PropertyAccess (PulumiSyntax.VariableAccess "range", "value"))
                 
                 "kind", PulumiSyntax.String "StorageV2"
+                "accountName", PulumiSyntax.String "storage"
                 "sku", PulumiSyntax.Object (Map.ofList [
                     PulumiSyntax.Identifier "name", PulumiSyntax.String "Standard_LRS"
                 ])

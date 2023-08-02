@@ -6,6 +6,7 @@ currentResourceGroup = invoke("azure-native:resources:getResourceGroup", {
 })
 resource storage "azure-native:storage:StorageAccount" {
     __logicalName = "storageaccount"
+    accountName = "storageaccount"
     kind = "StorageV2"
     location = currentResourceGroup.location
     resourceGroupName = currentResourceGroup.name

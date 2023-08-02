@@ -40,6 +40,7 @@ let transformFunction name args program =
 
     | "loadloadFileAsBase64", arg :: _ -> standardFunction "filebase64" [ "input", fromBicep arg program ]
     | "loadTextContent", arg :: _ -> standardFunction "file" [ "input", fromBicep arg program ]
+    | "json", arg :: _ -> PulumiSyntax.FunctionCall("toJSON", [ fromBicep arg program ])
 
     | funcName, args ->
         PulumiSyntax.FunctionCall(funcName, [ for arg in args -> fromBicep arg program ])
@@ -287,13 +288,18 @@ let extractResourceOptions (properties: Map<BicepSyntax, BicepSyntax>) (program:
     let options = List.choose id [find "dependsOn"; find "parent"]
     loop options None
 
-let extractResourceInputs (properties: Map<BicepSyntax, BicepSyntax>) (program: BicepProgram) =
+let extractResourceInputs (resourceToken: string) (properties: Map<BicepSyntax, BicepSyntax>) (program: BicepProgram) =
     let reservedResourceKeywords = ["name"; "scope"; "parent"; "dependsOn"]
     Map.ofList [
         for (propertyName, propertyValue) in Map.toList properties do
             match propertyName with
             | BicepSyntax.String "odata.type" ->
                 yield "odataType", fromBicep propertyValue program
+            | BicepSyntax.Identifier "name" ->
+                match Map.tryFind resourceToken Schema.nameParameterForResources with
+                | None -> ()
+                | Some parameterName ->
+                    yield parameterName, fromBicep propertyValue program
             | BicepSyntax.Identifier propertyName ->
                 if not (List.contains propertyName reservedResourceKeywords) then
                     yield propertyName, fromBicep propertyValue program
@@ -346,7 +352,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             token = resourceType
             logicalName = extractLogicalName properties
             inputs =
-                extractResourceInputs properties program
+                extractResourceInputs resourceType properties program
                 |> spreadProperties resourceType
             options = extractResourceOptions properties program
         }
@@ -371,7 +377,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             token = resourceType
             logicalName = extractLogicalName properties
             inputs =
-                extractResourceInputs properties program
+                extractResourceInputs resourceType properties program
                 |> spreadProperties resourceType
             options = Some resourceOptions
         }
@@ -421,7 +427,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
                 token = resourceType
                 logicalName = extractLogicalName properties
                 inputs =
-                    extractResourceInputs properties program
+                    extractResourceInputs resourceType properties program
                     |> spreadProperties resourceType
                 options = Some resourceOptions
             }
@@ -447,7 +453,7 @@ let bicepModule (moduleDecl: ModuleDeclaration) (program: BicepProgram) : Compon
             path = moduleDecl.path
             logicalName = extractLogicalName properties
             inputs =
-                extractResourceInputs properties program
+                extractResourceInputs "" properties program
                 |> extractComponentInputs
             options = extractResourceOptions properties program
         }
@@ -472,7 +478,7 @@ let bicepModule (moduleDecl: ModuleDeclaration) (program: BicepProgram) : Compon
             path = moduleDecl.path
             logicalName = extractLogicalName properties
             inputs =
-                extractResourceInputs properties program
+                extractResourceInputs "" properties program
                 |> extractComponentInputs
             options = Some resourceOptions
         }
@@ -522,7 +528,7 @@ let bicepModule (moduleDecl: ModuleDeclaration) (program: BicepProgram) : Compon
                 path = moduleDecl.path
                 logicalName = extractLogicalName properties
                 inputs =
-                    extractResourceInputs properties program
+                    extractResourceInputs "" properties program
                     |> extractComponentInputs
                 options = Some resourceOptions
             }

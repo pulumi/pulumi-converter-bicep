@@ -274,12 +274,34 @@ let main(args: string[]) : int =
                                     | elements when List.contains "name" elements -> [ getterInvokeToken, "name" ]
                                     | elements ->
                                         elements
-                                        |> List.minBy (fun property -> Levenshtein.Distance(property,resourceName))
+                                        |> List.minBy (fun property -> Levenshtein.Distance(property.ToLower(),resourceName))
                                         |> fun value -> [ getterInvokeToken, value ]
                         | None -> []
                     | _ -> [])
                 |> List.append [ "azure-native:resources:getResourceGroup", "resourceGroupName" ]
-               
+                
+            let nameParameterForResources =
+                azureNativeSchema.resources
+                |> Map.toList
+                |> List.collect (fun (token, resource) ->
+                    match token.Split ":" with
+                    | [| ns; moduleName; resourceName |] ->
+                        resource.inputProperties
+                        |> Map.toList
+                        |> List.map fst
+                        |> List.filter (fun propertyName ->
+                            let name = propertyName.ToLower()
+                            name <> "resourcegroupname" && (name.EndsWith "name" || name.EndsWith "id"))
+                        |> function
+                            | [] -> []
+                            | elements ->
+                                 elements
+                                 |> List.minBy (fun property ->
+                                     let propName = property.ToLower().Replace("name", "").Replace("id", "")
+                                     Levenshtein.Distance(propName,resourceName))
+                                 |> fun value -> [ token, value ]
+                    | _ -> [])
+
             let resourcesWhichHaveInputPropertiesObject =
                 azureNativeSchema.resources
                 |> Map.toList
@@ -313,6 +335,12 @@ let main(args: string[]) : int =
             append "let nameParameterForExistingResources = Map.ofArray [|\n"
             for invokeToken, parameterName in mainParameterToQueryExistingResources do
                 append $"   \"{invokeToken}\", \"{parameterName}\"\n"
+            append "|]"
+            append "\n\n"
+            
+            append "let nameParameterForResources = Map.ofArray [|\n"
+            for token, parameterName in nameParameterForResources do
+                append $"   \"{token}\", \"{parameterName}\"\n"
             append "|]"
             append "\n\n"
             

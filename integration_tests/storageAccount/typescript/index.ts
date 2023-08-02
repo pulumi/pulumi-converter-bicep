@@ -15,6 +15,7 @@ const storageLocations = [
     "west",
 ];
 const storage = new azure_native.storage.StorageAccount("storage", {
+    accountName: `storage${storagePrefix}`,
     kind: "StorageV2",
     location: location,
     resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
@@ -25,6 +26,7 @@ const storage = new azure_native.storage.StorageAccount("storage", {
 const storageAccounts: azure_native.storage.StorageAccount[] = [];
 for (const range = {value: 0}; range.value < 10; range.value++) {
     storageAccounts.push(new azure_native.storage.StorageAccount(`storageAccounts-${range.value}`, {
+        accountName: `storage${storagePrefix}${range.value}`,
         kind: "StorageV2",
         location: location,
         resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
@@ -36,6 +38,7 @@ for (const range = {value: 0}; range.value < 10; range.value++) {
 const storageAccountsByLocation: azure_native.storage.StorageAccount[] = [];
 for (const range of storageLocations.map((v, k) => ({key: k, value: v}))) {
     storageAccountsByLocation.push(new azure_native.storage.StorageAccount(`storageAccountsByLocation-${range.key}`, {
+        accountName: `storage${storagePrefix}${range.value}`,
         kind: "StorageV2",
         location: range.value,
         resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
@@ -47,9 +50,6 @@ for (const range of storageLocations.map((v, k) => ({key: k, value: v}))) {
 const exampleExistingStorage = azure_native.storage.getStorageAccountOutput({
     accountName: "existingStorageName",
     resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
-});
-const myExistingResourceGroup = azure_native.resources.getResourceGroupOutput({
-    resourceGroupName: "existingResourceGroupName",
 });
 export const storageEndpoint = storage.primaryEndpoints;
 export const existingEndpoint = exampleExistingStorage.apply(exampleExistingStorage => exampleExistingStorage.primaryEndpoints);

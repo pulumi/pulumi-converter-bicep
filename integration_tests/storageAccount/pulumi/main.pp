@@ -18,6 +18,7 @@ storageLocations = [
 ]
 
 resource storage "azure-native:storage:StorageAccount" {
+    accountName = "storage${storagePrefix}"
     kind = "StorageV2"
     location = location
     resourceGroupName = currentResourceGroup.name
@@ -29,6 +30,7 @@ resource storageAccounts "azure-native:storage:StorageAccount" {
     options {
         range = 10
     }
+    accountName = "storage${storagePrefix}${range.value}"
     kind = "StorageV2"
     location = location
     resourceGroupName = currentResourceGroup.name
@@ -40,6 +42,7 @@ resource storageAccountsByLocation "azure-native:storage:StorageAccount" {
     options {
         range = storageLocations
     }
+    accountName = "storage${storagePrefix}${range.value}"
     kind = "StorageV2"
     location = range.value
     resourceGroupName = currentResourceGroup.name
@@ -50,9 +53,6 @@ resource storageAccountsByLocation "azure-native:storage:StorageAccount" {
 exampleExistingStorage = invoke("azure-native:storage:getStorageAccount", {
     accountName = "existingStorageName"
     resourceGroupName = currentResourceGroup.name
-})
-myExistingResourceGroup = invoke("azure-native:resources:getResourceGroup", {
-    resourceGroupName = "existingResourceGroupName"
 })
 output storageEndpoint {
     value = storage.primaryEndpoints

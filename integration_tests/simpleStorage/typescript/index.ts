@@ -8,6 +8,7 @@ const currentResourceGroup = azure_native.resources.getResourceGroupOutput({
     resourceGroupName: resourceGroupName,
 });
 const storage = new azure_native.storage.StorageAccount("storageaccount", {
+    accountName: "storageaccount",
     kind: "StorageV2",
     location: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.location),
     resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),

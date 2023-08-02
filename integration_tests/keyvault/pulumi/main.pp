@@ -18,6 +18,7 @@ resource kv "azure-native:keyvault:Vault" {
         tenantId = tenantId
     }
     resourceGroupName = currentResourceGroup.name
+    vaultName = "kv-contoso"
 }
 resource adminPwd "azure-native:keyvault:Secret" {
     options {
@@ -28,4 +29,5 @@ resource adminPwd "azure-native:keyvault:Secret" {
         value = adminPassword
     }
     resourceGroupName = currentResourceGroup.name
+    secretName = "admin-password"
 }

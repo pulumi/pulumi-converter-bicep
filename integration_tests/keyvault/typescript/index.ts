@@ -18,12 +18,14 @@ const kv = new azure_native.keyvault.Vault("kv-contoso", {
         tenantId: tenantId,
     },
     resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
+    vaultName: "kv-contoso",
 });
 const adminPwd = new azure_native.keyvault.Secret("admin-password", {
     properties: {
         value: adminPassword,
     },
     resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
+    secretName: "admin-password",
 }, {
     parent: kv,
 });
