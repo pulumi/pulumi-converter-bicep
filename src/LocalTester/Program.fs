@@ -67,7 +67,8 @@ let main (args: string[]) =
             else
                 let pulumiTargetDirectory = Path.Combine(example, "pulumi")
                 let compilationResult = Compile.compileProgramWithComponents {
-                    entryBicepSourceFile = bicepFilePath
+                    entryBicepSource = Compile.BicepSource.FilePath bicepFilePath
+                    sourceDirectory = example
                     targetDirectory = pulumiTargetDirectory
                     storage = new FolderFileStorage(FolderFileStorageOptions(Folder=example))
                 }

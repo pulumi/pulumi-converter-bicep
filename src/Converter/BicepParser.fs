@@ -222,10 +222,8 @@ let addParentSymbol (parentSymbol: string) (resourceValue: BicepSyntax) =
     | _ ->
         resourceValue
 
-let parse (text: string) : Result<BicepProgram, string> =
+let parseProgram (program: ProgramSyntax) : Result<BicepProgram, string> =
   try 
-      let parser = Parser(text)
-      let program = parser.Program()
       let declarations = ResizeArray<BicepDeclaration>()
 
       let rec parseChildResources (value: SyntaxBase) (parentResourceToken: string) (parentResourceSymbol: string) =
@@ -335,6 +333,11 @@ let parse (text: string) : Result<BicepProgram, string> =
   | ex -> Error ex.Message
   
   
+let parse (text: string) = 
+   let parser = Parser(text)
+   let program = parser.Program()
+   parseProgram program
+
 let parseOrFail (source: string) =
     match parse source with
     | Ok program -> program

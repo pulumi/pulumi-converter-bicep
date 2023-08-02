@@ -1,26 +1,26 @@
 module Converter.Compile
 
+open Bicep.Core.Syntax
 open Converter.BicepParser
 open Foundatio.Storage
 open System.IO
 open BicepParser
 open Humanizer
 
+[<RequireQualifiedAccess>]
+type BicepSource =
+    | Content of string
+    | Program of ProgramSyntax
+    | FilePath of string
+
 type CompilationArgs = {
-    entryBicepSourceFile: string
+    entryBicepSource: BicepSource
+    sourceDirectory: string
     targetDirectory: string
     storage: IFileStorage
 }
 
 let compileProgramWithComponents (args: CompilationArgs) =
-    let storage = args.storage
-    let sourceDirectory = Path.GetDirectoryName args.entryBicepSourceFile
-    let bicepFileContent =
-        args.entryBicepSourceFile
-        |> storage.GetFileContentsAsync 
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
-    
     let rec compileProgram bicepProgram sourceDir targetDir targetFile = 
         let rewriteComponentPath (path: string) =
             let fileName = Path.GetFileNameWithoutExtension path
@@ -48,7 +48,7 @@ let compileProgramWithComponents (args: CompilationArgs) =
 
         let targetFile = Path.Combine(targetDir, targetFile)
         let saved =
-            storage.SaveFileAsync(targetFile, pulumiProgram)
+            args.storage.SaveFileAsync(targetFile, pulumiProgram)
             |> Async.AwaitTask
             |> Async.RunSynchronously
     
@@ -62,7 +62,7 @@ let compileProgramWithComponents (args: CompilationArgs) =
         for moduleDecl in moduleDeclarations do
             let sourceModulePath = Path.Combine(sourceDir, moduleDecl.path)
             let sourceModuleContent =
-                storage.GetFileContentsAsync(sourceModulePath)
+                args.storage.GetFileContentsAsync(sourceModulePath)
                 |> Async.AwaitTask
                 |> Async.RunSynchronously
             let moduleName = (Path.GetFileNameWithoutExtension sourceModulePath).Underscore()
@@ -74,9 +74,21 @@ let compileProgramWithComponents (args: CompilationArgs) =
             let moduleTargetDir = Path.Combine(targetDir, moduleName)
             compileProgram moduleProgram sourceDir moduleTargetDir $"{moduleName}.pp"
 
-    match BicepParser.parse bicepFileContent with
+    let mainBicepProgram =
+        match args.entryBicepSource with
+        | BicepSource.Content bicepFileContent -> BicepParser.parse bicepFileContent
+        | BicepSource.Program programSyntax -> BicepParser.parseProgram programSyntax
+        | BicepSource.FilePath path ->
+            path
+            |> args.storage.GetFileContentsAsync 
+            |> Async.AwaitTask
+            |> Async.RunSynchronously
+            |> BicepParser.parse
+   
+    match mainBicepProgram with
     | Error error ->
         Error error
-    | Ok mainBicepProgram ->
-        let result = compileProgram mainBicepProgram sourceDirectory args.targetDirectory "main.pp"
+
+    | Ok program ->
+        let result = compileProgram program args.sourceDirectory args.targetDirectory "main.pp"
         Ok result
