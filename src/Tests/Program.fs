@@ -674,6 +674,32 @@ resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
         | None ->
             failwith "Couldn't transform resource 'exampleStorage'"
     }
+
+    test "resource with property mappings applies them correctly"  {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: 'storage'
+  properties: {
+    networkAcls: {
+      defaultAction: 'Allow'
+    }
+  }
+}
+"""
+
+        let exampleStorage = BicepProgram.findResource "exampleStorage" program
+        match Transform.bicepResource exampleStorage program with
+        | Some pulumiResource ->
+            let expectedResourceInputs = Map.ofList [
+                "accountName", PulumiSyntax.String "storage"
+                "networkRuleSet", PulumiSyntax.Object (Map.ofList [
+                    PulumiSyntax.Identifier "defaultAction", PulumiSyntax.String "Allow"
+                ])
+            ]
+            Expect.equal pulumiResource.inputs expectedResourceInputs "resource inputs are correct"
+        | None ->
+            failwith "Couldn't transform resource 'exampleStorage'"
+    }
     
     test "conditional resource can be transformed" {
         let program = parseOrFail """

@@ -328,6 +328,16 @@ let extractResourceInputs (resourceToken: string) (properties: Map<BicepSyntax, 
                 ()
     ]
     
+type PropertyNameMapping = {
+    azureName: string
+    pulumiName: string
+} 
+let propertyMappings = Map.ofList [
+    "azure-native:storage:StorageAccount", [
+        { azureName = "networkAcls"; pulumiName = "networkRuleSet" }
+    ]    
+]
+
 let spreadProperties token (inputs: Map<string, PulumiSyntax>): Map<string, PulumiSyntax> =
     if not (Array.contains token Schema.resourcesWhichHaveInputPropertiesObject) then
         // for resources which don't have a property called "properties"
@@ -352,6 +362,23 @@ let spreadProperties token (inputs: Map<string, PulumiSyntax>): Map<string, Pulu
         // leave it as is
         inputs
 
+let applyPropertyMappings (token: string) (properties: Map<string, PulumiSyntax>) : Map<string, PulumiSyntax> =
+    match Map.tryFind token propertyMappings with
+    | None ->
+        properties
+    | Some mappings ->
+        Map.ofList [
+            for propertyName, propertyValue in Map.toList properties do
+                let pulumiPropertyName =
+                    mappings
+                    |> List.tryFind (fun mapping -> mapping.azureName = propertyName)
+                    |> function
+                        | None -> propertyName
+                        | Some mapping -> mapping.pulumiName
+                
+                yield pulumiPropertyName, propertyValue
+        ]
+
 let extractComponentInputs (properties: Map<string, PulumiSyntax>) =
     match Map.tryFind "params" properties with
     | Some(PulumiSyntax.Object componentInputs) -> componentInputs
@@ -375,6 +402,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             inputs =
                 extractResourceInputs resourceType properties program
                 |> spreadProperties resourceType
+                |> applyPropertyMappings resourceType
             options = extractResourceOptions properties program
         }
 
@@ -400,6 +428,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
             inputs =
                 extractResourceInputs resourceType properties program
                 |> spreadProperties resourceType
+                |> applyPropertyMappings resourceType
             options = Some resourceOptions
         }
         
@@ -450,6 +479,7 @@ let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Reso
                 inputs =
                     extractResourceInputs resourceType properties program
                     |> spreadProperties resourceType
+                    |> applyPropertyMappings resourceType
                 options = Some resourceOptions
             }
 
