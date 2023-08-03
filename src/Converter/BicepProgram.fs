@@ -1,6 +1,8 @@
 module Converter.BicepProgram
 
 open Bicep.Core.Exceptions
+open Bicep.Core.TypeSystem
+open Bicep.Core.TypeSystem.Az
 open BicepParser
 open Converter
 open Converter.BicepParser
@@ -521,3 +523,109 @@ let addResourceGroupNameParameterToModules (bicepProgram: BicepProgram)  : Bicep
             | declaration -> declaration)
 
     { bicepProgram with declarations = modifiedDeclarations }
+ 
+let azureResourceTypes =
+    let loader = AzResourceTypeLoader()
+    let provider = AzResourceTypeProvider(loader)
+    let references = provider.GetAvailableTypes()
+    Map.ofList [
+        for ref in references do
+            let fullTypeName = String.concat "/" ref.TypeSegments
+            $"{fullTypeName}@{ref.ApiVersion}", ref
+    ]
+
+[<RequireQualifiedAccess>]
+type AzureType =
+    | Any
+    | Object of azureProperties: Map<string, AzureType>
+    | Array of AzureType
+
+let private dropUnknownProperties (token: string) (resourceBody: Map<BicepSyntax, BicepSyntax>) : BicepSyntax =
+    let rec dropUnknowns (azureType: AzureType) (bicepValue: BicepSyntax) =
+        match azureType with
+        | AzureType.Any ->
+            bicepValue
+        | AzureType.Object azureProperties -> 
+            match bicepValue with
+            | BicepSyntax.Object bicepProperties ->
+                let modifiedProperties = ResizeArray<BicepSyntax * BicepSyntax>()
+                for property in bicepProperties do
+                    match property.Key with
+                    | BicepSyntax.Identifier identifier ->
+                        match Map.tryFind identifier azureProperties with
+                        | None ->
+                            // couldn't find the property, drop it
+                            ()
+                        | Some azureProperty ->
+                            let modifiedValue = dropUnknowns azureProperty property.Value
+                            modifiedProperties.Add (property.Key, modifiedValue)
+                    | _ ->
+                        modifiedProperties.Add (property.Key, property.Value)
+                    
+                BicepSyntax.Object (Map.ofSeq modifiedProperties)
+                
+            | _ -> bicepValue
+
+        | AzureType.Array elementType ->
+            match bicepValue with
+            | BicepSyntax.Array elements ->
+                BicepSyntax.Array [ for element in elements -> dropUnknowns elementType element ]
+            | _ ->
+                bicepValue
+
+    let rec createAzureType (typeRef: ITypeReference) : AzureType =
+        match typeRef.Type with
+        | :? ObjectType as objectType when objectType.Properties.Count > 0 ->
+            AzureType.Object(Map.ofList [
+                for property in objectType.Properties do
+                    yield property.Key, createAzureType property.Value.TypeReference
+            ])
+
+        | :? ArrayType as arrayType ->
+            AzureType.Array (createAzureType arrayType.Item)
+            
+        | _ ->
+            AzureType.Any
+
+    match Map.tryFind token azureResourceTypes with
+    | None -> BicepSyntax.Object resourceBody
+    | Some typeRef ->
+        let inputProperties = AzResourceTypeProvider.CreateResourceProperties typeRef
+        let azureProperties = AzureType.Object(Map.ofList [
+            for prop in inputProperties do
+                yield prop.Name, createAzureType prop.TypeReference
+                
+            yield "parent", AzureType.Any
+        ])
+        
+        dropUnknowns azureProperties (BicepSyntax.Object resourceBody)
+
+let dropResourceUnknowns (bicepProgram: BicepProgram)  : BicepProgram =
+    let modifiedDeclarations =
+        bicepProgram.declarations
+        |> List.map (function
+            | BicepDeclaration.Resource resource ->
+                match resource.value with
+                | BicepSyntax.Object properties ->
+                    let modifiedProperties = dropUnknownProperties resource.token properties 
+                    BicepDeclaration.Resource { resource with value = modifiedProperties }
+
+                | BicepSyntax.IfCondition (condition, BicepSyntax.Object properties) ->
+                    let modifiedProperties = dropUnknownProperties resource.token properties 
+                    let modifiedIfCondition = BicepSyntax.IfCondition(condition, modifiedProperties)
+                    BicepDeclaration.Resource { resource with value = modifiedIfCondition }
+
+                | BicepSyntax.For forSyntax ->
+                    match forSyntax.body with
+                    | BicepSyntax.Object properties ->
+                        let modifiedProperties = dropUnknownProperties resource.token properties
+                        let modifiedFor = BicepSyntax.For { forSyntax with body = modifiedProperties }
+                        BicepDeclaration.Resource { resource with value =  modifiedFor }
+                        
+                    | _ -> BicepDeclaration.Resource resource
+                    
+                | _ -> BicepDeclaration.Resource resource
+                
+            | declaration -> declaration)
+        
+    { bicepProgram with declarations = modifiedDeclarations  }

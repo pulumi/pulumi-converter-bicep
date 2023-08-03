@@ -29,6 +29,7 @@ let compileProgramWithComponents (args: CompilationArgs) =
         let pulumiProgram =
             if bicepProgram.programKind = ProgramKind.EntryPoint then 
                 bicepProgram
+                |> BicepProgram.dropResourceUnknowns
                 |> BicepProgram.reduceScopeParameter
                 |> BicepProgram.parameterizeByTenantId
                 |> BicepProgram.addResourceGroupNameParameterToModules
@@ -38,6 +39,7 @@ let compileProgramWithComponents (args: CompilationArgs) =
                 |> Printer.printProgram
             else
                 bicepProgram
+                |> BicepProgram.dropResourceUnknowns
                 |> BicepProgram.reduceScopeParameter
                 |> BicepProgram.parameterizeByTenantId
                 |> BicepProgram.addResourceGroupNameParameterToModules

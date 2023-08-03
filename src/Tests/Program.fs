@@ -380,6 +380,46 @@ module storageModule '../storageAccount.bicep' = {
         
         Expect.equal storageModule.value expectedBody "module body is parsed correctly"
     }
+
+    test "dropping unknown properties from azure resources works" {
+        let program = parseOrFail """
+resource exampleStorage 'Microsoft.Storage/storageAccounts@2021-02-01' = {
+  name: 'storageaccount'
+  location: 'eastus'
+  kind: 'StorageV2'
+  tags: {
+    environment: 'dev'
+    whatever: 'value'
+  }
+  sku: {
+    name: 'Standard_LRS'
+    whatever: 'hello'
+  }
+  
+  what_is_this: {}
+}
+"""
+
+        let exampleStorage =
+            program
+            |> BicepProgram.dropResourceUnknowns
+            |> BicepProgram.findResource "exampleStorage"
+
+        let expectedBody = BicepSyntax.Object(Map.ofList [
+            BicepSyntax.Identifier "name", BicepSyntax.String "storageaccount"
+            BicepSyntax.Identifier "location", BicepSyntax.String "eastus"
+            BicepSyntax.Identifier "kind", BicepSyntax.String "StorageV2"
+            BicepSyntax.Identifier "sku", BicepSyntax.Object(Map.ofList [
+                BicepSyntax.Identifier "name", BicepSyntax.String "Standard_LRS"
+            ])
+            BicepSyntax.Identifier "tags", BicepSyntax.Object(Map.ofList [
+                BicepSyntax.Identifier "environment", BicepSyntax.String "dev"
+                BicepSyntax.Identifier "whatever", BicepSyntax.String "value"
+            ])
+        ])
+        
+        Expect.equal exampleStorage.value expectedBody "module body is parsed correctly"
+    }
 ]
 
 let resourceTokenMappingTests = testList "Resource token mapping" [

@@ -1,9 +1,12 @@
 module rec Converter.Transform
 
 open System.IO
+open Bicep.Core.Resources
+open Bicep.Core.TypeSystem
 open Converter.BicepParser
 open Converter.PulumiTypes
 open Foundatio.Storage
+open Bicep.Core.TypeSystem.Az
 
 let invoke (token: string) (args: (string * PulumiSyntax) list) =
     let args = PulumiSyntax.Object(Map.ofList [
