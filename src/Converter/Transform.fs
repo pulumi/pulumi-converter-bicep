@@ -16,6 +16,9 @@ let invoke (token: string) (args: (string * PulumiSyntax) list) =
 let standardFunction (name: string) args =
     PulumiSyntax.PropertyAccess(invoke $"std:index:{name}" args, "result")
 
+let notImplemented (errorMessage: string) =
+    PulumiSyntax.FunctionCall("notImplemented", [ PulumiSyntax.String errorMessage ])
+    
 let transformFunction name args program =
     match name, args with
     | "resourceGroup", arg :: _ ->
@@ -41,7 +44,25 @@ let transformFunction name args program =
     | "loadloadFileAsBase64", arg :: _ -> standardFunction "filebase64" [ "input", fromBicep arg program ]
     | "loadTextContent", arg :: _ -> standardFunction "file" [ "input", fromBicep arg program ]
     | "json", arg :: _ -> PulumiSyntax.FunctionCall("toJSON", [ fromBicep arg program ])
-
+    | "reference", arg :: _ -> notImplemented "TODO: reference(...) is not available yet"
+    | "toLower", arg :: _ -> standardFunction "lower" [ "input", fromBicep arg program ]
+    | "toUpper", arg :: _ -> standardFunction "upper" [ "input", fromBicep arg program ]
+    | "startsWith", [ input; prefix ] ->
+        standardFunction "startswith" [
+            "input", fromBicep input program
+            "prefix", fromBicep prefix program
+        ]
+    
+    | "endsWith", [ input; suffix ] ->
+        standardFunction "endswith" [
+            "input", fromBicep input program
+            "suffix", fromBicep suffix program
+        ]
+    
+    | "base64", arg :: _ -> standardFunction "base64encode" [ "input", fromBicep arg program ]
+    | "base64ToString", arg :: _ -> standardFunction "base64decode" [ "input", fromBicep arg program ]
+    | "array", args -> PulumiSyntax.Array [ for arg in args -> fromBicep arg program ]
+    
     | funcName, args ->
         PulumiSyntax.FunctionCall(funcName, [ for arg in args -> fromBicep arg program ])
 
