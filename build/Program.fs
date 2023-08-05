@@ -103,6 +103,30 @@ let buildSolution() =
     if Shell.Exec("dotnet", "build -c Release", Path.Combine(repositoryRoot, "src")) <> 0
     then failwithf "Build failed"
 
+let azureNativeModuleVersions() =
+    let npmPackagePathSegments = [|
+        repositoryRoot
+        "integration_tests"
+        "simpleStorage"
+        "typescript"
+        "node_modules"
+        "@pulumi"
+        "azure-native"
+    |]
+
+    let npmPackagePath = Path.Combine npmPackagePathSegments
+    let availableModules = Directory.EnumerateDirectories npmPackagePath
+    Map.ofList [
+        for availableModulePath in availableModules do
+            let moduleName = DirectoryInfo(availableModulePath).Name
+            let availableVersions =
+                Directory.EnumerateDirectories availableModulePath
+                |> Seq.map (fun dir -> DirectoryInfo(dir).Name)
+                |> Seq.filter (fun dir -> dir.StartsWith "v")
+                
+            moduleName, List.ofSeq availableVersions
+    ]
+    
 let converterVersion() =
     let projectFilePath = Path.Combine(repositoryRoot, "src", "PulumiBicepConverter", "PulumiBicepConverter.fsproj")
     let content = File.ReadAllText projectFilePath
@@ -344,6 +368,18 @@ let main(args: string[]) : int =
             append "|]"
             append "\n\n"
             
+            append "let availableModuleVersions = Map.ofArray [|\n"
+            for availableModule in azureNativeModuleVersions() do
+                let moduleName = availableModule.Key
+                let moduleVersions =
+                    availableModule.Value
+                    |> List.map (fun version -> $"\"{version}\"")
+                    |> String.concat ";"
+                    
+                append $"   \"{moduleName}\", [{moduleVersions}]\n"
+            append "|]"
+            append "\n\n"
+
             File.WriteAllText(targetFile, content.ToString())
             printfn $"Written to {targetFile}"
             

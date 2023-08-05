@@ -1,4 +1,5 @@
-﻿open System.Text
+﻿open System
+open System.Text
 open Converter.PulumiTypes
 open Expecto
 open Converter
@@ -432,9 +433,10 @@ let resourceTokenMappingTests = testList "Resource token mapping" [
 
     test "Microsoft.Storage/storageAccounts@2021-02-01" {
         let azureSpecToken = "Microsoft.Storage/storageAccounts@2021-02-01"
-        let expectedPulumiToken = "azure-native:storage/v20210201:StorageAccount"
+        // the default version is selected because 2020-02-01 is not available
+        let expectedPulumiToken = "azure-native:storage:StorageAccount"
         let token = ResourceTokens.fromAzureSpecToPulumi azureSpecToken
-        Expect.equal expectedPulumiToken token "Token is correctly mapped"
+        Expect.equal token expectedPulumiToken  "Token is correctly mapped"
     }
     
     test "Microsoft.Storage/storageAccounts" {
@@ -484,6 +486,46 @@ let resourceTokenMappingTests = testList "Resource token mapping" [
         let expectedPulumiToken = "azure-native:network:VirtualNetworkLink"
         let token = ResourceTokens.fromAzureSpecToPulumiWithoutVersion azureSpecToken
         Expect.equal expectedPulumiToken token "Token is correctly mapped"
+    }
+]
+
+let computingVersions = testList "Computing available versions" [
+    test "finding exact version works" {
+        let input = ResourceTokens.AzureVersion.Stable (DateOnly(2020, 01, 01))
+        let available = [
+            ResourceTokens.AzureVersion.Stable (DateOnly(2020, 01, 01))
+            ResourceTokens.AzureVersion.Stable (DateOnly(2021, 01, 01))
+            ResourceTokens.AzureVersion.Stable (DateOnly(2022, 01, 01))
+        ]
+        
+        let chosen = ResourceTokens.chooseVersion input available
+        Expect.equal chosen (Some input) "The input was chosen because it was available"
+    }
+    
+    test "finding next available version works" {
+        let input = ResourceTokens.AzureVersion.Stable (DateOnly(2023, 01, 01))
+        let available = [
+            ResourceTokens.AzureVersion.Stable (DateOnly(2020, 01, 01))
+            ResourceTokens.AzureVersion.Stable (DateOnly(2022, 01, 01))
+            ResourceTokens.AzureVersion.Stable (DateOnly(2024, 01, 01))
+            ResourceTokens.AzureVersion.Stable (DateOnly(2025, 01, 01))
+        ]
+        
+        let chosen = ResourceTokens.chooseVersion input available
+        let expected = ResourceTokens.AzureVersion.Stable (DateOnly(2024, 01, 01))
+        Expect.equal chosen (Some expected) "Next available version is chosen"
+    }
+    
+    test "finding next available stable version works" {
+        let input = ResourceTokens.AzureVersion.Preview (DateOnly(2020, 01, 01))
+        let available = [
+            ResourceTokens.AzureVersion.Stable (DateOnly(2021, 01, 01))
+            ResourceTokens.AzureVersion.Preview (DateOnly(2021, 01, 01))
+        ]
+        
+        let chosen = ResourceTokens.chooseVersion input available
+        let expected = ResourceTokens.AzureVersion.Stable (DateOnly(2021, 01, 01))
+        Expect.equal chosen (Some expected) "Next available stable version is chosen"
     }
 ]
 
@@ -1057,6 +1099,7 @@ let allTests = testList "All tests" [
     configTypeInference
     resourceTransforms
     printTests
+    computingVersions
 ]
 
 [<EntryPoint>]

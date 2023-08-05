@@ -395,7 +395,7 @@ let extractLogicalName (properties: Map<BicepSyntax, BicepSyntax>) =
 
 let bicepResource (resource: ResourceDeclaration) (program: BicepProgram) : Resource option =
     let name = resource.name
-    let resourceType = ResourceTokens.fromAzureSpecToPulumiWithoutVersion resource.token
+    let resourceType = ResourceTokens.fromAzureSpecToPulumi resource.token
     match resource.value with
     | BicepSyntax.Object properties ->
         let resource : Resource = {

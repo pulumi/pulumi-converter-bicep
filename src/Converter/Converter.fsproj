@@ -8,10 +8,9 @@
     <ItemGroup>
         <Compile Include="Tokens.fs" />
         <Compile Include="BicepParser.fs" />
-        <Compile Include="ResourceTokens.fs" />
         <Compile Include="Schema.fs" />
+        <Compile Include="ResourceTokens.fs" />
         <Compile Include="BicepProgram.fs" />
-       
         <Compile Include="PulumiTypes.fs" />
         <Compile Include="Transform.fs" />
         <Compile Include="Printer.fs" />
