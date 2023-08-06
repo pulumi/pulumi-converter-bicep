@@ -73,21 +73,10 @@ let chooseVersion (input: AzureVersion) (availableVersions: AzureVersion list) =
         // an exact version is available, choose it
         Some input
     else
-        let hasStableVersions =
-            availableVersions
-            |> List.exists (function
-                | AzureVersion.Stable _ -> true
-                | _ -> false)
-
         availableVersions
         |> List.sortBy (function
            | AzureVersion.Stable stableDate -> stableDate
-           | AzureVersion.Preview previewDate ->
-               // when there are stable versions
-               // put the preview versions "all the way to the back"
-               if hasStableVersions
-               then DateOnly.MaxValue
-               else previewDate)
+           | AzureVersion.Preview previewDate -> previewDate.AddDays -1)
         |> List.tryFind (fun availableVersion ->
             let availableVersionDate =
                 match availableVersion with
@@ -97,7 +86,7 @@ let chooseVersion (input: AzureVersion) (availableVersions: AzureVersion list) =
                 match input with
                 | AzureVersion.Stable stableDate -> stableDate
                 | AzureVersion.Preview previewDate -> previewDate
-            // find the first available stable version which is greater than the input version
+            // find the first available version which is greater than the input version
             availableVersionDate > inputExactVersion)
 
 let computeAvailableVersion (moduleName: string) (bicepVersion: string) =

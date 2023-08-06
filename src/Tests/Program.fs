@@ -516,7 +516,7 @@ let computingVersions = testList "Computing available versions" [
         Expect.equal chosen (Some expected) "Next available version is chosen"
     }
     
-    test "finding next available stable version works" {
+    test "finding next available version including previews works" {
         let input = ResourceTokens.AzureVersion.Preview (DateOnly(2020, 01, 01))
         let available = [
             ResourceTokens.AzureVersion.Stable (DateOnly(2021, 01, 01))
@@ -524,8 +524,8 @@ let computingVersions = testList "Computing available versions" [
         ]
         
         let chosen = ResourceTokens.chooseVersion input available
-        let expected = ResourceTokens.AzureVersion.Stable (DateOnly(2021, 01, 01))
-        Expect.equal chosen (Some expected) "Next available stable version is chosen"
+        let expected = ResourceTokens.AzureVersion.Preview (DateOnly(2021, 01, 01))
+        Expect.equal chosen (Some expected) "Next available version is chosen to be preview"
     }
 ]
 
