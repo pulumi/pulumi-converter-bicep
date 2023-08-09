@@ -13,7 +13,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Converter\Converter.fsproj" />
-      <ProjectReference Include="..\PulumiRPC\PulumiRPC.csproj" />
     </ItemGroup>
 
     <ItemGroup>
