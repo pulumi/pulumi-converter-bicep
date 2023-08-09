@@ -24,22 +24,6 @@ let rec findParent (directory: string) (fileToFind: string) =
 
 let repositoryRoot = findParent __SOURCE_DIRECTORY__ "README.md";
 
-let syncProtoFiles() = GitSync.repository {
-    remoteRepository = "https://github.com/pulumi/pulumi.git"
-    localRepositoryPath = repositoryRoot
-    contents = [
-        GitSync.folder {
-            sourcePath = [ "proto"; "pulumi" ]
-            destinationPath = [ "proto"; "pulumi" ]
-        }
-
-        GitSync.folder {
-            sourcePath = [ "proto"; "google"; "protobuf" ]
-            destinationPath = [ "proto"; "google"; "protobuf" ]
-        }
-    ]
-}
-
 let pulumiCliBinary() : Task<string> = task {
     try
         // try to get the version of pulumi installed on the system
@@ -134,7 +118,7 @@ let converterVersion() =
     use content = new MemoryStream(Encoding.UTF8.GetBytes content)
     doc.Load(content)
     doc.GetElementsByTagName("Version").[0].InnerText
-    
+
 let artifacts = Path.Combine(repositoryRoot, "artifacts")
 
 let createTarGz (source: string) (target: string)  =
@@ -244,7 +228,6 @@ let createAndPublishArtifacts() =
 [<EntryPoint>]
 let main(args: string[]) : int =
     match args with
-    | [| "sync-proto-files" |] -> syncProtoFiles()
     | [| "tests" |] ->
         runTests()
     | [| "integration-tests" |] ->

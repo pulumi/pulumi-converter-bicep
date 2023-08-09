@@ -2,8 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "PulumiBicepConverter", "PulumiBicepConverter\PulumiBicepConverter.fsproj", "{876FD8D0-F4CE-4618-B80F-E1452549EF85}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PulumiRPC", "PulumiRPC\PulumiRPC.csproj", "{094EBB51-7E8D-44B7-9029-373369373749}"
-EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Build", "..\Build.fsproj", "{7B592E2F-CF8C-4B59-836B-1AADE94994AB}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Tests", "Tests\Tests.fsproj", "{11927383-F826-4802-A63E-F3256A44BAB4}"
@@ -22,10 +20,6 @@ Global
 		{876FD8D0-F4CE-4618-B80F-E1452549EF85}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{876FD8D0-F4CE-4618-B80F-E1452549EF85}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{876FD8D0-F4CE-4618-B80F-E1452549EF85}.Release|Any CPU.Build.0 = Release|Any CPU
-		{094EBB51-7E8D-44B7-9029-373369373749}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{094EBB51-7E8D-44B7-9029-373369373749}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{094EBB51-7E8D-44B7-9029-373369373749}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{094EBB51-7E8D-44B7-9029-373369373749}.Release|Any CPU.Build.0 = Release|Any CPU
 		{7B592E2F-CF8C-4B59-836B-1AADE94994AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7B592E2F-CF8C-4B59-836B-1AADE94994AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B592E2F-CF8C-4B59-836B-1AADE94994AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
