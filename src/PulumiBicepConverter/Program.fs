@@ -2,6 +2,7 @@
 
 open Foundatio.Storage
 open Converter
+open System
 open System.IO
 open Pulumi.Experimental.Converter
 open Pulumi.Codegen
@@ -14,6 +15,18 @@ let errorResponse (message: string) =
     ConvertProgramResponse(Diagnostics=diagnostics)
 
 let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
+    let logsFile = Environment.GetEnvironmentVariable "BICEP_CONVERTER_LOGS" 
+    if not (String.IsNullOrWhiteSpace logsFile) then
+        let logs = ResizeArray [
+            "Bicep Converter Request"
+            "----------------------"
+            "Source Directory: " + request.SourceDirectory
+            "Target Directory: " + request.TargetDirectory
+            "Args: " + String.Join(" ", request.Args)
+        ]
+        
+        File.WriteAllLines(Path.Combine(request.SourceDirectory, logsFile), logs)
+
     let bicepFile =
        request.Args
        |> Seq.pairwise
