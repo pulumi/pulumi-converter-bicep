@@ -28,6 +28,9 @@ let transformFunction name args program =
         invoke "azure-native:resources:getResourceGroup" [
             "resourceGroupName", fromBicep arg program
         ]
+        
+    | "getClientConfig", _ ->
+        invoke "azure-native:authorization:getClientConfig" [  ]
 
     | "getExistingResource", [ BicepSyntax.String resourceToken; BicepSyntax.Object properties ] ->
         let invokeToken = ResourceTokens.fromAzureSpecToExistingResourceToken resourceToken

@@ -15,12 +15,25 @@ let errorResponse (message: string) =
 
 let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
     let bicepFile =
-       Directory.EnumerateFiles(request.SourceDirectory)
-       |> Seq.tryFind (fun file -> Path.GetExtension(file) = ".bicep")
+       request.Args
+       |> Seq.pairwise
+       |> Seq.tryFind (fun (argKey, argValue) -> argKey = "--entry")
+       |> Option.map (fun (_, entry) ->
+           if not (entry.EndsWith ".bicep")
+           then entry
+           else entry + ".bicep")
+       |> Option.map (fun entryBicep ->
+           if Path.IsPathRooted(entryBicep)
+           then entryBicep
+           else Path.Combine(request.SourceDirectory, entryBicep))
+       |> Option.orElse (
+           Directory.EnumerateFiles(request.SourceDirectory)
+           |> Seq.tryFind (fun file -> Path.GetExtension(file) = ".bicep")
+       )
 
     match bicepFile with
     | None -> 
-        errorResponse "No Bicep file found in the source directory"
+        errorResponse "Could not find the entry bicep file from the source directory"
     | Some entryBicepFile ->
         let storageOptions = FolderFileStorageOptions(Folder=request.SourceDirectory)
         let storage = new FolderFileStorage(storageOptions)

@@ -394,7 +394,7 @@ let parameterizeByResourceGroup (bicepProgram: BicepProgram) : BicepProgram =
         
         programWithAddedDeclarations
 
-let parameterizeByTenantId (bicepProgram: BicepProgram) : BicepProgram =
+let parameterizeByTenantAndSubscriptionId (bicepProgram: BicepProgram) : BicepProgram =
     let containsImplicitSubscriptionTenantId =
         bicepProgram
         |> programContains (function
@@ -407,37 +407,36 @@ let parameterizeByTenantId (bicepProgram: BicepProgram) : BicepProgram =
             | BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("tenant", [  ]), "tenantId") -> true
             | _ -> false)
 
-    let tenantIdParameter = BicepDeclaration.Parameter {
-        name = "tenantId"
-        parameterType = Some "string"
-        decorators = [  ]
-        defaultValue =
-            match bicepProgram.programKind with
-            | ProgramKind.EntryPoint -> None
-            | ProgramKind.Module -> Some (BicepSyntax.String "")
-    }
+    let containsImplicitSubscriptionId =
+        bicepProgram
+        |> programContains (function
+            | BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("subscription", [  ]), "subscriptionId") -> true
+            | _ -> false)
     
-    if not containsImplicitSubscriptionTenantId && not containsImplicitTenantId then
+    if not containsImplicitSubscriptionTenantId && not containsImplicitTenantId && not containsImplicitSubscriptionId then
         bicepProgram
     else
+        let currentClientConfig = BicepDeclaration.Variable {
+            name = "currentClientConfig"
+            value = BicepSyntax.FunctionCall("getClientConfig", [  ])
+        }
+
         let replacements = Map.ofList [
-            BicepSyntax.PropertyAccess(
-                BicepSyntax.FunctionCall("subscription", [  ]), "tenantId"), BicepSyntax.VariableAccess "tenantId"
+            BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("subscription", [  ]), "tenantId"),
+                BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "currentClientConfig", "tenantId")
+                
+            BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("subscription", [  ]), "subscriptionId"),
+                BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "currentClientConfig", "subscriptionId")
             
-            BicepSyntax.PropertyAccess(
-                BicepSyntax.FunctionCall("tenant", [  ]), "tenantId"), BicepSyntax.VariableAccess "tenantId"
+            BicepSyntax.PropertyAccess(BicepSyntax.FunctionCall("tenant", [  ]), "tenantId"),
+                BicepSyntax.PropertyAccess(BicepSyntax.VariableAccess "currentClientConfig", "tenantId")
         ]
 
         let modifiedProgram = programReplace replacements bicepProgram
         let programWithAddedDeclarations = {
             bicepProgram with
                 declarations = [
-                    match tryFindParameter "tenantId" modifiedProgram  with
-                    | None ->
-                        // add the parameter
-                        yield tenantIdParameter
-                    | _ ->
-                        ()
+                    yield currentClientConfig
                     yield! modifiedProgram.declarations
                 ]
         }

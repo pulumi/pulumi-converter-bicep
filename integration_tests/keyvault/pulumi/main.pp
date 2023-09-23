@@ -4,8 +4,8 @@ config resourceGroupName "string" {
 currentResourceGroup = invoke("azure-native:resources:getResourceGroup", {
     resourceGroupName = resourceGroupName
 })
-config tenantId "string" {
-}
+currentClientConfig = invoke("azure-native:authorization:getClientConfig", {
+})
 config adminPassword "string" {
 }
 resource kv "azure-native:keyvault:Vault" {
@@ -15,7 +15,7 @@ resource kv "azure-native:keyvault:Vault" {
             family = "A"
             name = "standard"
         }
-        tenantId = tenantId
+        tenantId = currentClientConfig.tenantId
     }
     resourceGroupName = currentResourceGroup.name
     vaultName = "kv-contoso"

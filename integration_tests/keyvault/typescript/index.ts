@@ -7,7 +7,7 @@ const resourceGroupName = config.require("resourceGroupName");
 const currentResourceGroup = azure_native.resources.getResourceGroupOutput({
     resourceGroupName: resourceGroupName,
 });
-const tenantId = config.require("tenantId");
+const currentClientConfig = azure_native.authorization.getClientConfig({});
 const adminPassword = config.require("adminPassword");
 const kv = new azure_native.keyvault.Vault("kv-contoso", {
     properties: {
@@ -15,7 +15,7 @@ const kv = new azure_native.keyvault.Vault("kv-contoso", {
             family: "A",
             name: azure_native.keyvault.SkuName.Standard,
         },
-        tenantId: tenantId,
+        tenantId: currentClientConfig.then(currentClientConfig => currentClientConfig.tenantId),
     },
     resourceGroupName: currentResourceGroup.apply(currentResourceGroup => currentResourceGroup.name),
     vaultName: "kv-contoso",

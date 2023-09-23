@@ -31,7 +31,7 @@ let compileProgramWithComponents (args: CompilationArgs) =
                 bicepProgram
                 |> BicepProgram.dropResourceUnknowns
                 |> BicepProgram.reduceScopeParameter
-                |> BicepProgram.parameterizeByTenantId
+                |> BicepProgram.parameterizeByTenantAndSubscriptionId
                 |> BicepProgram.addResourceGroupNameParameterToModules
                 |> BicepProgram.parameterizeByResourceGroup
                 |> Transform.bicepProgramToPulumi
@@ -41,7 +41,7 @@ let compileProgramWithComponents (args: CompilationArgs) =
                 bicepProgram
                 |> BicepProgram.dropResourceUnknowns
                 |> BicepProgram.reduceScopeParameter
-                |> BicepProgram.parameterizeByTenantId
+                |> BicepProgram.parameterizeByTenantAndSubscriptionId
                 |> BicepProgram.addResourceGroupNameParameterToModules
                 |> BicepProgram.parameterizeByResourceGroupName
                 |> Transform.bicepProgramToPulumi
