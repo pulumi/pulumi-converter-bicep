@@ -35,8 +35,8 @@ let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
        |> Seq.tryFind (fun (argKey, argValue) -> argKey = "--entry")
        |> Option.map (fun (_, entry) ->
            if not (entry.EndsWith ".bicep")
-           then entry
-           else entry + ".bicep")
+           then entry + ".bicep"
+           else entry)
        |> Option.map (fun entryBicep ->
            if Path.IsPathRooted(entryBicep)
            then entryBicep
