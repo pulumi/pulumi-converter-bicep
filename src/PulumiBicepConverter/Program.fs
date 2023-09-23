@@ -14,8 +14,10 @@ let errorResponse (message: string) =
     
     ConvertProgramResponse(Diagnostics=diagnostics)
 
+let logsFile() = Environment.GetEnvironmentVariable "BICEP_CONVERTER_LOGS"
+
 let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
-    let logsFile = Environment.GetEnvironmentVariable "BICEP_CONVERTER_LOGS" 
+    let logsFile = logsFile()
     if not (String.IsNullOrWhiteSpace logsFile) then
         let logs = ResizeArray [
             "Bicep Converter Request"
@@ -25,7 +27,7 @@ let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
             "Args: " + String.Join(" ", request.Args)
         ]
         
-        File.WriteAllLines(Path.Combine(request.SourceDirectory, logsFile), logs)
+        File.AppendAllLines(Path.Combine(request.SourceDirectory, logsFile), logs)
 
     let bicepFile =
        request.Args
@@ -61,7 +63,24 @@ let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
         | Error error -> errorResponse error
         | Ok() -> ConvertProgramResponse.Empty
 
-convertProgram
+let convertProgramWithErrorHandling (request: ConvertProgramRequest): ConvertProgramResponse =
+    try
+        convertProgram request
+    with
+    | ex ->
+        let logsFile = logsFile()
+        if not (String.IsNullOrWhiteSpace logsFile) then
+            File.AppendAllLines(Path.Combine(request.SourceDirectory, logsFile), [
+                "Exception: " + ex.ToString()
+            ])
+
+        let diagnostics = ResizeArray [
+            Diagnostic(Summary=ex.Message, Detail=ex.StackTrace, Severity=DiagnosticSeverity.Error)
+        ]
+
+        ConvertProgramResponse(Diagnostics=diagnostics)
+
+convertProgramWithErrorHandling
 |> Converter.CreateSimple
 |> Converter.Serve
 |> Async.AwaitTask
