@@ -1,9 +1,9 @@
 # pulumi-converter-bicep
 
-A Pulumi converter plugin to convert Bicep files to Pulumi languages. Currently work in progress.
+A Pulumi converter plugin to convert Bicep code to Pulumi languages. Currently work in progress.
 
 ### Installation
-
+Install the plugin from Github releases using the following command
 ```
 pulumi plugin install converter bicep --server github://api.github.com/Zaid-Ajaj
 ```
@@ -11,9 +11,11 @@ pulumi plugin install converter bicep --server github://api.github.com/Zaid-Ajaj
 ### Usage
 Run the following command in the directory where your Bicep files are located
 ```
-pulumi convert --from bicep --language <language> --out pulumi --entry <entry-file>
+pulumi convert --from bicep --language <language> --out pulumi -- --entry <entry-file>
 ```
 Will convert Bicep code into your language of choice: `typescript`, `csharp`, `python`, `go`, `java` or `yaml`
+
+> Note that if you don't specify the `--entry` flag, the converter will look for the first file in the current directory which has the `.bicep` extension.
 
 ### Example
 ```bicep
@@ -47,6 +49,37 @@ const storage = new azure_native.storage.StorageAccount("storageaccount", {
     },
 });
 
+```
+or to `csharp`
+```csharp
+using System.Collections.Generic;
+using System.Linq;
+using Pulumi;
+using AzureNative = Pulumi.AzureNative;
+
+return await Deployment.RunAsync(() => 
+{
+    var config = new Config();
+    // The name of the resource group to operate on
+    var resourceGroupName = config.Require("resourceGroupName");
+    var currentResourceGroup = AzureNative.Resources.GetResourceGroup.Invoke(new()
+    {
+        ResourceGroupName = resourceGroupName,
+    });
+
+    var storage = new AzureNative.Storage.StorageAccount("storageaccount", new()
+    {
+        AccountName = "storageaccount",
+        Kind = "StorageV2",
+        Location = currentResourceGroup.Apply(getResourceGroupResult => getResourceGroupResult.Location),
+        ResourceGroupName = currentResourceGroup.Apply(getResourceGroupResult => getResourceGroupResult.Name),
+        Sku = new AzureNative.Storage.Inputs.SkuArgs
+        {
+            Name = "Standard_LRS",
+        },
+    });
+
+});
 ```
 
 ### Development

@@ -41,6 +41,7 @@ let convertProgram (request: ConvertProgramRequest): ConvertProgramResponse =
            if Path.IsPathRooted(entryBicep)
            then entryBicep
            else Path.Combine(request.SourceDirectory, entryBicep))
+       |> Option.filter File.Exists
        |> Option.orElse (
            Directory.EnumerateFiles(request.SourceDirectory)
            |> Seq.tryFind (fun file -> Path.GetExtension(file) = ".bicep")
