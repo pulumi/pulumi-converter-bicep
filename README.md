@@ -5,7 +5,7 @@ A Pulumi converter plugin to convert Bicep code to Pulumi languages. Currently w
 ### Installation
 Install the plugin from Github releases using the following command
 ```
-pulumi plugin install converter bicep --server github://api.github.com/Zaid-Ajaj
+pulumi plugin install converter bicep
 ```
 
 ### Usage
